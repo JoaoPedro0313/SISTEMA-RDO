@@ -19,7 +19,7 @@
     SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxeGVqZm9pYmViY2J0c3F5bWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NjUzMTEsImV4cCI6MjA4NzQ0MTMxMX0.lwf7_EJ6UchEOpzhW3cVKztxDGy78gaQblRvgiEwWh8',
     TABELA: 'rdo_campo',
     BUCKET: 'rdo-fotos',
-    VERSAO: '1.2.2',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
+    VERSAO: '1.2.3',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
     FOTO_LADO: 1600,        // maior lado da foto enviada (px)
     FOTO_QUALIDADE: 0.72,   // JPEG: ~250–450 KB por foto
     MINI_LADO: 320,         // miniatura guardada no celular
@@ -145,7 +145,7 @@
     function abrir() {
       if (aberto) return aberto;
       aberto = new Promise(function (res, rej) {
-        var r = indexedDB.open('mariua-rdo-campo', 1);
+        var r = indexedDB.open(window.RDO_DB_NOME || 'mariua-rdo-campo', 1);   // o modo de teste (demo/) usa outro banco
         r.onupgradeneeded = function () {
           var d = r.result;
           if (!d.objectStoreNames.contains('rdos')) d.createObjectStore('rdos', { keyPath: 'id' });
@@ -689,7 +689,7 @@
   function plataforma() {
     var ua = navigator.userAgent, m;
     if (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'iPhone';
-    if ((m = ua.match(/Android\s([\d.]+)/))) return 'Android ' + m[1].split('.')[0];
+    if ((m = ua.match(/Android\s([\d.]+)/))) return 'Android ' + m[1].split('.')[0] + (noApk() ? ' (APK)' : '');
     return /Windows/.test(ua) ? 'Computador (Windows)' : /Mac/.test(ua) ? 'Computador (Mac)' : 'Outro';
   }
   async function informarAparelho(forcar) {
@@ -797,7 +797,8 @@
   }
 
   function ehIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
-  function instalado() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+  function noApk() { return /RDOCampoApp\//.test(navigator.userAgent); }   // aberto pelo APK RDO Mariuá
+  function instalado() { return noApk() || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
   async function renderInstalar() {
     var box = $('ini-instalar');
     var recusou = await kvGet('instalar-nao');
@@ -1796,7 +1797,7 @@
   }
 
   function registrarSW() {
-    if (!('serviceWorker' in navigator)) return;
+    if (!('serviceWorker' in navigator) || window.RDO_TESTE) return;      // modo de teste: sem instalação
     var perguntarVersao = function () {
       var c = navigator.serviceWorker.controller;
       if (c) perguntarAoSW(c, { tipo: 'info' }).then(function (i) {

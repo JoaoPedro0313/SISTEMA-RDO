@@ -5,9 +5,9 @@
    Os celulares percebem a mudança ao abrir o app, ao voltar para ele e a cada
    15 minutos com ele aberto, e mostram "Nova versão do app" com o botão
    Atualizar agora. As NOVIDADES aparecem nesse aviso (até 3 linhas curtas). */
-var VERSAO = '1.2.2';
+var VERSAO = '1.2.3';
 var NOVIDADES = [
-  'Esqueci a senha abre a página do Sistema RDO para criar a senha nova'
+  'Pronto para o app RDO Mariuá instalado pelo arquivo APK'
 ];
 
 var CACHE = 'rdo-campo-' + VERSAO;

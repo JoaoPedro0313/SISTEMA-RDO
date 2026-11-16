@@ -4,7 +4,7 @@ Sistema separado do site turno-hoje, com duas partes. A **gestão**, para o escr
 
 ## O que tem no repositório
 
-O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão. O `rdo-app.js` abre o RDO com as fotos, importa a lista de serviços e mostra o QR code de instalação. O `rdo_campo.sql` tem tudo o que o banco precisa. A pasta `campo/` é o app. O `logo-mariua.png` é o logo usado na gestão e na impressão do RDO.
+O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão. O `rdo-app.js` abre o RDO com as fotos, importa a lista de serviços e mostra o QR code de instalação. O `rdo_campo.sql` tem tudo o que o banco precisa. A pasta `campo/` é o app, e a pasta `demo/` é o modo de teste. O `logo-mariua.png` é o logo usado na gestão e na impressão do RDO.
 
 ## Como colocar no ar
 
@@ -13,6 +13,12 @@ Primeiro, no Supabase, abra SQL Editor → New query, cole o `rdo_campo.sql` int
 Para o "Esqueci a senha" voltar para o Sistema RDO, no Supabase, em Authentication → URL Configuration → Redirect URLs, acrescente `https://joaopedro0313.github.io/SISTEMA-RDO/**`. Sem isso, o link de senha nova continua indo para o site do sistema Mariuá, que também funciona.
 
 Por fim, entre na gestão com um usuário gestor, importe a lista de serviços e libere o acesso das pessoas do escritório, as duas coisas em Configurações. O botão "Instalar no celular" mostra o QR code e o link do app para os encarregados.
+
+## Modo de teste (sem login)
+
+A pasta `demo/` é uma versão de teste do sistema, sem login e sem banco. A gestão de teste fica em `https://joaopedro0313.github.io/SISTEMA-RDO/demo/` e o app de teste em `https://joaopedro0313.github.io/SISTEMA-RDO/demo/campo/`. Elas usam o mesmo código do sistema real, mas no lugar do Supabase há um banco simulado, guardado só no navegador, com uma semana de RDOs de exemplo, as equipes, a programação do dia e a lista de serviços. Nada vai para o banco de verdade, e o teste funciona mesmo antes de rodar o `rdo_campo.sql`.
+
+A gestão de teste abre como gestor e o app de teste como o encarregado Alan. Abertas as duas no mesmo navegador, o RDO enviado pelo app de teste aparece na gestão de teste na hora. O selo "MODO DE TESTE", no topo, recomeça o teste com os dados iniciais; os dados de exemplo também se renovam sozinhos a cada dia. Para testar outro usuário, toque em Sair e entre com joao.araujo (gestor), maria.escritorio (escritório), alan ou bruno (encarregados), com qualquer senha. No celular, o app de teste funciona sozinho, com os dados guardados no próprio aparelho. Para tirar o modo de teste do ar, apague a pasta `demo/` do repositório.
 
 ## Quem entra
 

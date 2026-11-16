@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var VERSAO_APP = '1.2.2';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
+  var VERSAO_APP = '1.2.3';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
   var MOTIVOS_PADRAO = ['Chuva', 'Falta de material', 'Desligamento não liberado', 'Interferência de terceiros',
     'Veículo ou equipamento', 'Acidente ou incidente', 'Outro'];
   var CLIMA = { bom: 'Bom', nublado: 'Nublado', chuva: 'Chuva', impraticavel: 'Impraticável' };
@@ -665,6 +665,7 @@
     var u = G.user ? String(G.user.email || '') : '';
     $('g-sem-tx').textContent = msg || ('O usuário ' + u.split('@')[0] + ' não tem acesso à gestão do RDO. Peça a um gestor para liberar em Configurações, Acesso à gestão. Se você é encarregado, use o app de campo no celular.');
     tela('g-sem-acesso');
+    selo_banco('local', 'Sem acesso');
   }
   function traduzLogin(e) {
     var m = String((e && e.message) || e || '');
