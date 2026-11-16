@@ -586,7 +586,10 @@
   }
 
   // ─── instalar no celular (QR code) ──────────────────────────────────────
-  function urlApp() { try { return new URL('campo/', window.MARIUA_BASE || location.href).href; } catch (e) { return 'campo/'; } }
+  function urlApp() {
+    if (window.RDO_LINK_INSTALAR) return window.RDO_LINK_INSTALAR;
+    try { return new URL('baixar/', window.MARIUA_BASE || location.href).href; } catch (e) { return 'baixar/'; }
+  }
   function carregarQr() {
     if (window.QRCode) return Promise.resolve();
     return new Promise(function (ok, falha) {
@@ -600,10 +603,10 @@
     abrirModal('<div class="rdoapp-cab"><div class="tx"><h2>Instalar o app de RDO no celular</h2><p>Para os encarregados das equipes</p></div>' +
       '<button type="button" class="rdoapp-bt" data-rdoapp-fechar>Fechar</button></div>' +
       '<div class="rdoapp-corpo"><div class="rdoapp-qr"><div id="rdoapp-qrcode" aria-label="QR code com o link do app"></div><ol>' +
-      '<li>Aponte a câmera do celular para o código ou abra o link abaixo (Chrome no Android, Safari no iPhone).</li>' +
+      '<li>Aponte a câmera do celular para o código ou abra o link abaixo.</li>' +
+      '<li>Na página, toque em Baixar para Android e instale o app. No iPhone, a página mostra como usar o app pelo Safari.</li>' +
       '<li>Entre com o usuário (o começo do e-mail, antes do @) e a senha do sistema. Cada encarregado precisa de uma conta, criada no Admin do sistema Mariuá.</li>' +
-      '<li>No Android, toque em Instalar. No iPhone, toque em Compartilhar e depois em Adicionar à Tela de Início.</li>' +
-      '</ol></div><div class="rdoapp-link"><input id="rdoapp-url" readonly value="' + esc(url) + '" aria-label="Link do app">' +
+      '</ol></div><div class="rdoapp-link"><input id="rdoapp-url" readonly value="' + esc(url) + '" aria-label="Link da página de download do app">' +
       '<button type="button" class="rdoapp-bt forte" id="rdoapp-copiar">Copiar link</button></div></div>', 'Instalar o app no celular');
     $('rdoapp-copiar').addEventListener('click', function () {
       var bt = this, inp = $('rdoapp-url');

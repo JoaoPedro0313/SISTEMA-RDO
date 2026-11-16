@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a4a4d">
+<title>Baixar o app · RDO Mariuá</title>
+<link rel="icon" href="../campo/icons/favicon-32.png" sizes="32x32">
+<style>
+@font-face{font-family:'Barlow';font-weight:500;font-display:swap;src:url(../campo/fonts/barlow-latin-500-normal.woff2) format('woff2')}
+@font-face{font-family:'Barlow';font-weight:600;font-display:swap;src:url(../campo/fonts/barlow-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Barlow';font-weight:700;font-display:swap;src:url(../campo/fonts/barlow-latin-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Barlow Condensed';font-weight:700;font-display:swap;src:url(../campo/fonts/barlow-condensed-latin-700-normal.woff2) format('woff2')}
+:root{--topo:#0a4a4d;--petroleo:#0d7377;--petroleo-tx:#0a5c5f;--sinal:#ff6b35;--sinal-tx:#2a1206;--tinta:#13292b;--tinta-2:#45595c;--linha:#c9d6d7;--chao:#e8efef;--papel:#fff;--cinza:#4b5563;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--petroleo:#2aa59b;--petroleo-tx:#6fd3c8;--topo:#062f31;--tinta:#eaf2f2;--tinta-2:#a8bcbe;--linha:#33494b;--chao:#0c1617;--papel:#152224;--cinza:#9aa4b2;color-scheme:dark}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Barlow',system-ui,-apple-system,Roboto,sans-serif;font-weight:500;font-size:17px;line-height:1.45;color:var(--tinta);background:var(--chao);padding-bottom:env(safe-area-inset-bottom,0px)}
+.topo{background:var(--topo);color:#fff;border-bottom:3px solid var(--sinal);padding:calc(12px + env(safe-area-inset-top,0px)) 16px 12px}
+.topo-in{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:10px}
+.topo img{width:30px;height:30px}
+.topo b{font-family:'Barlow Condensed','Barlow',sans-serif;font-size:1.35rem;letter-spacing:.3px}
+main{max-width:720px;margin:0 auto;padding:22px 16px 40px}
+h1{font-family:'Barlow Condensed','Barlow',sans-serif;font-size:2.1rem;line-height:1.05}
+.sub{color:var(--tinta-2);font-weight:600;margin-top:6px}
+.aviso{margin-top:16px;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--sinal) 14%,var(--papel));border-left:5px solid var(--sinal);font-weight:600}
+.aviso[hidden]{display:none}
+.apps{display:grid;gap:14px;margin-top:20px}
+.app{display:flex;gap:14px;align-items:flex-start;background:var(--papel);border:1px solid var(--linha);border-radius:16px;padding:16px}
+.app:target{outline:3px solid var(--sinal);outline-offset:2px}
+.app-ic{flex-shrink:0;width:64px;height:64px;border-radius:16px;background:var(--petroleo);display:flex;align-items:center;justify-content:center}
+.app-ic img{width:42px;height:42px}
+.app.teste .app-ic{background:#4b5563}
+.app-tx{flex:1;min-width:0}
+.app h2{font-family:'Barlow Condensed','Barlow',sans-serif;font-size:1.5rem;line-height:1.1}
+.app p{color:var(--tinta-2);font-weight:600;font-size:.95rem;margin-top:3px}
+.bt{display:flex;align-items:center;justify-content:center;gap:10px;min-height:54px;margin-top:12px;padding:0 18px;border-radius:12px;border:2px solid transparent;font-weight:700;font-size:1.08rem;text-decoration:none}
+.bt svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.bt-sinal{background:var(--sinal);color:var(--sinal-tx)}
+.bt-linha{background:var(--papel);color:var(--tinta);border-color:var(--cinza)}
+.meta{font-size:.85rem;font-weight:600;color:var(--tinta-2);margin-top:8px}
+h3{font-family:'Barlow Condensed','Barlow',sans-serif;font-size:1.45rem;margin:30px 0 10px}
+ol{padding-left:22px}
+ol li{margin-bottom:8px;font-weight:600}
+ol li span{display:block;font-weight:500;color:var(--tinta-2);font-size:.95rem}
+.caixa{background:var(--papel);border:1px solid var(--linha);border-radius:16px;padding:16px}
+.caixa a{color:var(--petroleo-tx);font-weight:700}
+.qr{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+#qr{padding:10px;background:#fff;border-radius:12px;border:1px solid var(--linha);line-height:0}
+#qr:empty{display:none}
+.qr-tx{flex:1;min-width:220px}
+.qr-tx code{display:block;margin-top:6px;font-size:.88rem;word-break:break-all;color:var(--tinta-2)}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<header class="topo"><div class="topo-in"><img src="../campo/icons/logo-96.png" alt=""><b>RDO Mariuá</b></div></header>
+<main>
+  <h1>Baixe o app de RDO</h1>
+  <p class="sub">O app do encarregado para lançar o RDO com fotos no celular, mesmo sem internet.</p>
+  <p class="aviso" id="aviso-iphone" hidden>Você está num iPhone. O arquivo de instalação (APK) é só para Android: veja abaixo como usar o app pelo Safari.</p>
+
+  <div class="apps">
+    <section class="app" id="mariua">
+      <div class="app-ic"><img src="../campo/icons/logo-96.png" alt=""></div>
+      <div class="app-tx">
+        <h2>RDO Mariuá</h2>
+        <p>O app de verdade. Entre com o seu usuário e senha do sistema Mariuá.</p>
+        <a class="bt bt-sinal" href="../apk/rdo-mariua.apk" download="rdo-mariua.apk">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Baixar para Android
+        </a>
+        <p class="meta">Versão 1.2, 133 KB. Android 6 ou mais novo.</p>
+      </div>
+    </section>
+    <section class="app teste" id="teste">
+      <div class="app-ic"><img src="../campo/icons/logo-96.png" alt=""></div>
+      <div class="app-tx">
+        <h2>RDO Teste</h2>
+        <p>Modo de teste, sem login e com dados de exemplo. Instala ao lado do RDO Mariuá.</p>
+        <a class="bt bt-linha" href="../apk/rdo-teste.apk" download="rdo-teste.apk">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Baixar o RDO Teste
+        </a>
+        <p class="meta">Versão 1.2, 129 KB. Precisa de internet.</p>
+      </div>
+    </section>
+  </div>
+
+  <h3>Como instalar no Android</h3>
+  <ol>
+    <li>Toque no botão Baixar.<span>Se o Chrome avisar que o arquivo pode ser perigoso, toque em "Fazer o download mesmo assim". O aviso aparece porque o app não vem da Play Store.</span></li>
+    <li>Abra o arquivo baixado.<span>Ele aparece na notificação do download ou na pasta Downloads.</span></li>
+    <li>Permita a instalação.<span>Se o Android pedir, ative "Permitir desta fonte" (instalar apps desconhecidos) para o Chrome e volte.</span></li>
+    <li>Toque em Instalar.<span>Se o Play Protect avisar que o app não é conhecido, toque em "Mais detalhes" e depois em "Instalar mesmo assim".</span></li>
+    <li>Abra o app e entre com seu usuário e senha.<span>Quando ele pedir, permita a localização: é ela que carimba as fotos com o GPS.</span></li>
+  </ol>
+
+  <h3>No iPhone</h3>
+  <div class="caixa">
+    <p>No iPhone não existe APK. Abra o <a href="../campo/">app de campo no Safari</a>, toque em Compartilhar (o quadrado com a seta para cima) e depois em Adicionar à Tela de Início. O app fica com ícone na tela, como os outros.</p>
+  </div>
+
+  <div id="bloco-qr" hidden>
+    <h3>Está no computador?</h3>
+    <div class="caixa qr">
+      <div id="qr" aria-label="QR code desta página"></div>
+      <div class="qr-tx">
+        <p>Aponte a câmera do celular para o código, ou digite este endereço no navegador do celular:</p>
+        <code id="endereco"></code>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+(function () {
+  var ua = navigator.userAgent;
+  var iphone = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var celular = iphone || /Android|Mobile/.test(ua);
+  if (iphone) document.getElementById('aviso-iphone').hidden = false;
+  if (!celular) {
+    var aqui = location.href.split('#')[0];
+    document.getElementById('bloco-qr').hidden = false;
+    document.getElementById('endereco').textContent = aqui;
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    s.onload = function () { new QRCode(document.getElementById('qr'), { text: aqui, width: 168, height: 168, colorDark: '#0a4a4d', colorLight: '#ffffff' }); };
+    document.head.appendChild(s);
+  }
+})();
+</script>
+</body>
+</html>

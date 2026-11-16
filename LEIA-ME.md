@@ -4,7 +4,7 @@ Sistema separado do site turno-hoje, com duas partes. A **gestão**, para o escr
 
 ## O que tem no repositório
 
-O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão. O `rdo-app.js` abre o RDO com as fotos, importa a lista de serviços e mostra o QR code de instalação. O `rdo_campo.sql` tem tudo o que o banco precisa. A pasta `campo/` é o app, e a pasta `demo/` é o modo de teste. O `logo-mariua.png` é o logo usado na gestão e na impressão do RDO.
+O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão. O `rdo-app.js` abre o RDO com as fotos, importa a lista de serviços e mostra o QR code de instalação. O `rdo_campo.sql` tem tudo o que o banco precisa. A pasta `campo/` é o app, a pasta `demo/` é o modo de teste, e as pastas `baixar/` e `apk/` são a página de download e os APKs para Android. O `logo-mariua.png` é o logo usado na gestão e na impressão do RDO.
 
 ## Como colocar no ar
 
@@ -13,6 +13,10 @@ Primeiro, no Supabase, abra SQL Editor → New query, cole o `rdo_campo.sql` int
 Para o "Esqueci a senha" voltar para o Sistema RDO, no Supabase, em Authentication → URL Configuration → Redirect URLs, acrescente `https://joaopedro0313.github.io/SISTEMA-RDO/**`. Sem isso, o link de senha nova continua indo para o site do sistema Mariuá, que também funciona.
 
 Por fim, entre na gestão com um usuário gestor, importe a lista de serviços e libere o acesso das pessoas do escritório, as duas coisas em Configurações. O botão "Instalar no celular" mostra o QR code e o link do app para os encarregados.
+
+## Baixar o app (APK)
+
+A página `https://joaopedro0313.github.io/SISTEMA-RDO/baixar/` tem os dois APKs para Android e o passo a passo de instalação: o **RDO Mariuá**, o app de verdade, com login, e o **RDO Teste**, que abre o modo de teste sem login. Os arquivos ficam na pasta `apk/` (`rdo-mariua.apk` e `rdo-teste.apk`). No iPhone, a página explica como usar o app pelo Safari; no computador, mostra um QR code para abrir a página no celular. O botão "Instalar no celular" da gestão leva a essa página. O código dos APKs e a chave de assinatura não ficam no repositório: guarde-os à parte.
 
 ## Modo de teste (sem login)
 
