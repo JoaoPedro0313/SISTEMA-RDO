@@ -19,7 +19,7 @@
     SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxeGVqZm9pYmViY2J0c3F5bWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NjUzMTEsImV4cCI6MjA4NzQ0MTMxMX0.lwf7_EJ6UchEOpzhW3cVKztxDGy78gaQblRvgiEwWh8',
     TABELA: 'rdo_campo',
     BUCKET: 'rdo-fotos',
-    VERSAO: '1.2.3',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
+    VERSAO: '1.2.5',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
     FOTO_LADO: 1600,        // maior lado da foto enviada (px)
     FOTO_QUALIDADE: 0.72,   // JPEG: ~250–450 KB por foto
     MINI_LADO: 320,         // miniatura guardada no celular
@@ -239,6 +239,7 @@
   function traduzErroLogin(e) {
     var m = String((e && e.message) || e || '');
     if (/invalid login credentials|usuario-nao-encontrado/i.test(m)) return 'Usuário ou senha incorretos.';
+    if (/banned|desativad/i.test(m)) return 'Esta conta está desativada. Fale com o escritório.';
     if (/mais de uma conta/i.test(m)) return m;
     if (/rdo_campo_email_login|could not find the function/i.test(m)) return 'Por enquanto, entre com o e-mail completo: o banco ainda não tem o login por usuário (rdo_campo.sql).';
     if (/email not confirmed/i.test(m)) return 'Esta conta ainda não foi confirmada. Fale com o escritório.';
@@ -278,6 +279,9 @@
       await kvSet('ultimo-usuario', usuario.indexOf('@') > 0 ? usuarioDaConta(S.conta) : usuario.toLowerCase());
       $('lg-senha').value = '';
       try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+      // aparelho dividido (ex.: tablet): se quem escolheu a equipe foi outra conta, escolhe de novo
+      var dono = await kvGet('equipe-de');
+      if (dono && dono !== S.conta.email) { S.equipe = null; await kvDel('equipe'); }
       if (!S.equipe) S.equipe = (await kvGet('equipe')) || null;
       trocar(S.equipe ? '#' : '#equipe');
       sincronizar();
@@ -365,6 +369,7 @@
       centro: q.centro || '', supervisor: q.supervisor || ''
     };
     await kvSet('equipe', S.equipe);
+    if (S.conta && S.conta.email) await kvSet('equipe-de', S.conta.email);
     informarAparelho(true);
     aviso('Equipe ' + S.equipe.codigo + ' escolhida.', 'ok');
     contexto(hojeISO()).catch(function () {});

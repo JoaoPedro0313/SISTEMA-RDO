@@ -39,6 +39,7 @@
     'ALAN-IRC':  [['2001', 'Bruno Lima', 'ELETRICISTA'], ['2002', 'Carlos Souza', 'AUXILIAR'], ['2003', 'Diego Ramos', 'ELETRICISTA'], ['2004', 'Everton Silva', 'MOTORISTA']],
     'BRUNO-JAC': [['2101', 'Fernando Alves', 'ELETRICISTA'], ['2102', 'Gabriel Costa', 'AUXILIAR'], ['2103', 'Henrique Dias', 'MOTORISTA']]
   };
+  var FUNCIONARIOS_EXTRA = [['3001', 'ANA PAULA FERREIRA', 'ATIVO'], ['3002', 'RAFAEL MOREIRA', 'ATIVO'], ['3003', 'SERGIO TAVARES', 'AFASTADO'], ['3004', 'LUCAS PEREIRA', 'ATIVO']];
   var OBRAS = [
     ['PEP-2026-0412', 'Extensão de rede Lagoa Grande', 'Irecê'], ['PEP-2026-0388', 'Melhoria BT Centro', 'Irecê'],
     ['PEP-2026-0501', 'Reforço rede rural Várzea', 'Jacobina'], ['PEP-2026-0455', 'Ligação nova Loteamento Sol', 'Feira de Santana'],
@@ -132,7 +133,15 @@
       return { contrato: CONTRATO, codigo: x[0], descricao: x[1], unidade: x[2], casas_decimais: x[3], grupo: x[4], ativo: true,
                atualizado_em: quando(0, 9, 30), atualizado_por: 'joao.araujo@mariua.com.br' };
     });
+    var contas = [
+      { email: 'joao.araujo@mariua.com.br', nome: 'João Araújo', matricula: '0901', gestor: true, ativo: true, criado_em: quando(200, 9) },
+      { email: 'maria.escritorio@mariua.com.br', nome: 'Maria Souza', matricula: '0902', gestor: false, ativo: true, criado_em: quando(150, 9) }
+    ].concat(EQUIPES.map(function (q, i) {
+      return { email: norm(q.encarregado.split(' ')[0]).toLowerCase() + '@mariua.com.br', nome: q.encarregado, matricula: q.matricula, func_nome: norm(q.encarregado),
+               gestor: false, ativo: true, criado_em: quando(90 - i * 5, 10) };
+    })).concat([{ email: 'kleber@mariua.com.br', nome: 'Kléber Dias', matricula: '1011', gestor: false, ativo: false, criado_em: quando(120, 10) }]);
     return {
+      contas: contas,
       rdo_campo: rdos, rdo_campo_aparelhos: aparelhos, prog: prog, servicos_catalogo: catalogo,
       rdo_campo_config: [{ id: 1, atualizado_em: quando(2, 10), atualizado_por: 'joao.araujo@mariua.com.br', dados: {
         aviso: 'Este é o modo de teste. Os RDOs ficam só neste navegador.', aviso_ativo: true, fotos_minimas: 1, exigir_termino: false, versao_minima: '',
@@ -174,10 +183,10 @@
   // Semeia uma vez por dia: no dia seguinte o teste recomeça com datas novas.
   var pronto = (async function () {
     var marca = await banco.ler('_semente');
-    if (!marca || marca.dia !== dia(0)) {
+    if (!marca || marca.dia !== dia(0) || !marca.contas) {
       var s = semente();
       for (var k in s) await banco.gravar(k, s[k]);
-      await banco.gravar('_semente', { dia: dia(0), em: Date.now() });
+      await banco.gravar('_semente', { dia: dia(0), em: Date.now(), contas: true });
     }
   })();
   async function tabela(n) { await pronto; return (await banco.ler(n)) || []; }
@@ -190,16 +199,22 @@
 
   // ─── sessão de teste (sem login) ────────────────────────────────────────
   var CHAVE = 'rdo-teste-sessao-' + TIPO;
+  var CHAVE_CONTA = 'rdo-teste-conta-' + TIPO;
+  function contaInfo(e) {
+    if (USUARIOS[e]) return USUARIOS[e];
+    try { var j = JSON.parse(localStorage.getItem(CHAVE_CONTA) || 'null'); if (j && j.email === e) return j; } catch (x) {}
+    return null;
+  }
   var PADRAO = TIPO === 'campo' ? 'alan@mariua.com.br' : 'joao.araujo@mariua.com.br';
   function usuarioAtual() {
     var v = null;
     try { v = localStorage.getItem(CHAVE); } catch (e) {}
     if (v === null) return PADRAO;
-    return v && USUARIOS[v] ? v : null;            // '' = saiu
+    return v && contaInfo(v) ? v : null;           // '' = saiu
   }
   function sessao() {
     var e = usuarioAtual(); if (!e) return null;
-    var u = USUARIOS[e];
+    var u = contaInfo(e);
     return { access_token: 'teste', refresh_token: 'teste', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
              user: { id: u.id, email: e, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: { nome: u.nome, matricula: u.matricula || '' } } };
   }
@@ -214,8 +229,15 @@
     },
     signInWithPassword: async function (c) {
       var e = String((c && c.email) || '').toLowerCase();
-      if (!USUARIOS[e]) return { data: { user: null, session: null }, error: { message: 'Invalid login credentials', status: 400 } };
-      try { localStorage.setItem(CHAVE, e); } catch (x) {}
+      var conta = (await tabela('contas')).filter(function (x) { return x.email === e; })[0];
+      var invalido = { data: { user: null, session: null }, error: { message: 'Invalid login credentials', status: 400 } };
+      if (!conta) return invalido;
+      if (conta.ativo === false) return { data: { user: null, session: null }, error: { message: 'User is banned', status: 400 } };
+      if (conta.senha && conta.senha !== String(c.password || '')) return invalido;      // contas criadas no teste têm senha
+      try {
+        localStorage.setItem(CHAVE, e);
+        localStorage.setItem(CHAVE_CONTA, JSON.stringify({ email: e, id: (USUARIOS[e] || {}).id || 'teste-' + e.split('@')[0], nome: conta.nome || e.split('@')[0], matricula: conta.matricula || '', gestor: !!conta.gestor }));
+      } catch (x) {}
       var s = sessao(); avisar('SIGNED_IN', s);
       return { data: { user: s.user, session: s }, error: null };
     },
@@ -272,22 +294,27 @@
   }
 
   // ─── funções do banco (rpc) ─────────────────────────────────────────────
-  function emailDe(usuario) {
-    var u = String(usuario || '').trim().toLowerCase();
-    if (u.indexOf('@') > 0) return USUARIOS[u] ? u : null;
-    for (var e in USUARIOS) if (e.split('@')[0] === u || USUARIOS[e].matricula === u) return e;
-    return null;
+  async function emailDe(usuario) {
+    var u = String(usuario || '').trim().toLowerCase(), contas = await tabela('contas');
+    var c = contas.filter(function (x) { return u.indexOf('@') > 0 ? x.email === u : (x.email.split('@')[0] === u || String(x.matricula || '') === u); })[0];
+    return c ? c.email : null;
   }
   async function papel() {
     var e = usuarioAtual(); if (!e) return null;
-    if (USUARIOS[e].gestor) return 'gestor';
+    var conta = (await tabela('contas')).filter(function (x) { return x.email === e; })[0];
+    if (conta && conta.gestor) return 'gestor';
     var ac = await tabela('rdo_campo_acesso');
     return ac.some(function (x) { return x.email === e && x.ativo; }) ? 'escritorio' : null;
+  }
+  function todosFuncionarios() {
+    var lista = EQUIPES.map(function (q) { return [q.matricula, norm(q.encarregado), 'ATIVO']; });
+    Object.keys(EFETIVO).forEach(function (k) { EFETIVO[k].forEach(function (f) { lista.push([f[0], norm(f[1]), 'ATIVO']); }); });
+    return lista.concat(FUNCIONARIOS_EXTRA);
   }
   async function soGestor(msg) { if ((await papel()) !== 'gestor') throw new Error(msg); }
 
   var RPC = {
-    rdo_campo_email_login: async function (p) { return emailDe(p.p_usuario); },
+    rdo_campo_email_login: async function (p) { return await emailDe(p.p_usuario); },
     rdo_campo_meu_acesso: papel,
     rdo_campo_acessos: async function () {
       await soGestor('Só gestores veem quem tem acesso à gestão.');
@@ -295,12 +322,64 @@
     },
     rdo_campo_definir_acesso: async function (p) {
       await soGestor('Só gestores liberam acesso à gestão.');
-      var e = emailDe(p.p_usuario);
-      if (!e) throw new Error('Não achamos uma conta com esse usuário. No teste, use maria.escritorio, alan ou bruno.');
+      var e = await emailDe(p.p_usuario);
+      if (!e) throw new Error('Não achamos uma conta com esse usuário. Crie a conta na aba Usuários.');
       var ac = (await tabela('rdo_campo_acesso')).filter(function (x) { return x.email !== e; });
       ac.push({ email: e, ativo: !!p.p_ativo, incluido_em: new Date().toISOString(), incluido_por: usuarioAtual() });
       await salvar('rdo_campo_acesso', ac);
       return { email: e, ativo: !!p.p_ativo };
+    },
+    admin_listar_usuarios: async function () {
+      await soGestor('Sem acesso à lista de usuários.');
+      return (await tabela('contas')).map(function (c) {
+        return { email: c.email, nome: c.nome || null, matricula: c.matricula || null, func_nome: c.func_nome || null, telefone: c.telefone || null,
+                 data_vigencia: c.data_vigencia || null, gestor: !!c.gestor, ativo: c.ativo !== false, criado_em: c.criado_em };
+      });
+    },
+    admin_criar_usuario: async function (p) {
+      await soGestor('Só gestores criam usuários.');
+      var e = String(p.p_email || '').trim().toLowerCase(), contas = await tabela('contas');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new Error('E-mail inválido.');
+      if (contas.some(function (c) { return c.email === e; })) throw new Error('User already registered');
+      if (String(p.p_senha || '').length < 6) throw new Error('A senha precisa de pelo menos 6 caracteres.');
+      var func = todosFuncionarios().filter(function (f) { return f[0] === String(p.p_matricula || ''); })[0];
+      contas.push({ email: e, nome: p.p_nome || null, matricula: p.p_matricula || null, func_nome: func ? func[1] : null, telefone: p.p_telefone || null,
+                    data_vigencia: p.p_vigencia || null, gestor: !!p.p_gestor, ativo: true, criado_em: new Date().toISOString(), senha: String(p.p_senha) });
+      await salvar('contas', contas);
+      return { email: e };
+    },
+    admin_atualizar_usuario: async function (p) {
+      await soGestor('Só gestores mudam usuários.');
+      var contas = await tabela('contas'), c = contas.filter(function (x) { return x.email === String(p.p_email || '').toLowerCase(); })[0];
+      if (!c) throw new Error('Conta não encontrada.');
+      c.nome = p.p_nome || null; c.matricula = p.p_matricula || null; c.telefone = p.p_telefone || null; c.data_vigencia = p.p_vigencia || null;
+      var func = todosFuncionarios().filter(function (f) { return f[0] === String(c.matricula || ''); })[0];
+      c.func_nome = func ? func[1] : null;
+      await salvar('contas', contas);
+      return true;
+    },
+    admin_set_ativo: async function (p) {
+      await soGestor('Só gestores ativam ou desativam usuários.');
+      var contas = await tabela('contas'), c = contas.filter(function (x) { return x.email === String(p.p_email || '').toLowerCase(); })[0];
+      if (!c) throw new Error('Conta não encontrada.');
+      c.ativo = !!p.p_ativo;
+      await salvar('contas', contas);
+      return true;
+    },
+    admin_set_telas: async function () { return true; },
+    admin_buscar_funcionarios: async function (p) {
+      var t = norm(p.p_termo);
+      return todosFuncionarios().filter(function (f) { return f[0].indexOf(t) === 0 || norm(f[1]).indexOf(t) >= 0; })
+        .slice(0, 20).map(function (f) { return { matricula: f[0], nome: f[1], situacao: f[2] }; });
+    },
+    rdo_campo_definir_senha: async function (p) {
+      await soGestor('Só gestores trocam a senha de outra pessoa.');
+      if (String(p.p_senha || '').length < 6) throw new Error('A senha precisa de pelo menos 6 caracteres.');
+      var contas = await tabela('contas'), c = contas.filter(function (x) { return x.email === String(p.p_email || '').trim().toLowerCase(); })[0];
+      if (!c) throw new Error('Não achamos a conta ' + p.p_email + '.');
+      c.senha = String(p.p_senha);
+      await salvar('contas', contas);
+      return null;
     },
     rdo_campo_equipes: async function () { return EQUIPES.map(function (q) { return Object.assign({ utd: '', supervisor: '', tipo: '', veiculo: '' }, q); }); },
     rdo_campo_contexto: async function (p) {
@@ -438,8 +517,8 @@
       if (selo.textContent === 'Banco conectado') selo.textContent = 'Banco de teste';
     }).observe(selo, { childList: true, characterData: true, subtree: true });
     var dica = function (el, tx) { if (!el) return; var p = document.createElement('p'); p.className = 'rdo-teste-dica'; p.textContent = tx; el.insertBefore(p, el.firstChild); };
-    dica(document.getElementById('g-form-login'), 'Modo de teste: entre com joao.araujo (gestor), maria.escritorio (escritório) ou alan (encarregado), com qualquer senha.');
-    dica(document.getElementById('form-login'), 'Modo de teste: entre com alan ou bruno, com qualquer senha.');
+    dica(document.getElementById('g-form-login'), 'Modo de teste: entre com joao.araujo (gestor), maria.escritorio (escritório) ou alan (encarregado), com qualquer senha. Contas criadas na aba Usuários usam a senha definida.');
+    dica(document.getElementById('form-login'), 'Modo de teste: entre com alan ou bruno, com qualquer senha. Contas criadas na gestão de teste usam a senha definida lá.');
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', marcar); else marcar();
 })();

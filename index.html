@@ -9,7 +9,7 @@
 <link rel="icon" href="campo/icons/favicon-32.png" sizes="32x32">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
-<link rel="stylesheet" href="gestao.css?v=2">
+<link rel="stylesheet" href="gestao.css?v=3">
 </head>
 <body>
 <div class="top-bar">
@@ -108,6 +108,7 @@
     <button type="button" class="m-aba" role="tab" id="ga-t-producao" aria-controls="ga-producao" aria-selected="false">Produção</button>
     <button type="button" class="m-aba" role="tab" id="ga-t-equipes" aria-controls="ga-equipes" aria-selected="false">Equipes</button>
     <button type="button" class="m-aba" role="tab" id="ga-t-celulares" aria-controls="ga-celulares" aria-selected="false">Celulares</button>
+    <button type="button" class="m-aba" role="tab" id="ga-t-usuarios" aria-controls="ga-usuarios" aria-selected="false">Usuários</button>
     <button type="button" class="m-aba" role="tab" id="ga-t-config" aria-controls="ga-config" aria-selected="false">Configurações</button>
   </div>
 
@@ -181,6 +182,20 @@
     </div>
   </section>
 
+  <section class="ga-painel" id="ga-usuarios" role="tabpanel" aria-labelledby="ga-t-usuarios" hidden>
+    <div class="m-cartao">
+      <div class="m-cartao-cab"><span class="m-h2"><i class="ti ti-users" aria-hidden="true"></i>Usuários do app e da gestão</span><span class="m-meta" id="ga-usu-resumo"></span></div>
+      <div class="ga-barra-usu">
+        <label class="m-procura"><i class="ti ti-search" aria-hidden="true"></i><input type="search" id="ga-usu-busca" placeholder="Procurar por nome, usuário, matrícula ou equipe" aria-label="Procurar usuário"></label>
+        <label class="ga-check"><input type="checkbox" id="ga-usu-inativos"> Mostrar desativados</label>
+        <button type="button" class="m-bt m-bt-pri" id="ga-usu-novo"><i class="ti ti-user-plus" aria-hidden="true"></i>Novo usuário</button>
+      </div>
+      <p class="m-meta ga-usu-aviso" id="ga-usu-aviso" hidden></p>
+      <div class="ga-rola" id="ga-usu-tabela"><table class="m-tabela"><thead><tr><th>Nome</th><th>Matrícula</th><th>Equipe</th><th>Acesso</th><th>Último uso do app</th><th>Situação</th><th><span class="ga-oculto">Ações</span></th></tr></thead><tbody id="ga-usu-corpo"></tbody></table></div>
+      <p class="m-meta ga-rodape">As contas são as mesmas do sistema Mariuá: quem é criado aqui também aparece no Admin de lá, e o contrário também vale. O encarregado entra no app com o usuário (o começo do e-mail, antes do @) e a senha.</p>
+    </div>
+  </section>
+
   <section class="ga-painel" id="ga-config" role="tabpanel" aria-labelledby="ga-t-config" hidden>
     <div class="m-grade">
       <form class="m-cartao" id="ga-form-config" novalidate>
@@ -233,6 +248,38 @@
   </section>
 </div>
 </div>
+<dialog class="ga-dlg" id="ga-dlg-usu" aria-labelledby="ga-du-tit">
+  <form id="ga-du-form" novalidate>
+    <div class="ga-dlg-cab"><h3 id="ga-du-tit">Novo usuário</h3><p class="m-meta" id="ga-du-sub"></p></div>
+    <div class="ga-dlg-corpo">
+      <label class="ga-campo" data-modo="novo editar">Procurar no cadastro de funcionários
+        <input type="text" id="ga-du-func" list="ga-du-func-lista" placeholder="Digite o nome ou a matrícula" autocomplete="off">
+        <datalist id="ga-du-func-lista"></datalist>
+      </label>
+      <label class="ga-campo" data-modo="novo editar">Nome completo<input type="text" id="ga-du-nome" autocomplete="off"></label>
+      <label class="ga-campo" data-modo="novo editar">Matrícula<input type="text" id="ga-du-mat" inputmode="numeric" autocomplete="off"></label>
+      <div class="ga-campo" data-modo="novo">Usuário para entrar no app
+        <div class="ga-du-login"><input type="text" id="ga-du-usuario" autocapitalize="none" spellcheck="false" autocomplete="off" aria-label="Usuário"><span aria-hidden="true">@</span><input type="text" id="ga-du-dominio" autocapitalize="none" spellcheck="false" autocomplete="off" aria-label="Domínio do e-mail da empresa" placeholder="empresa.com.br"></div>
+        <span class="ga-pequeno" id="ga-du-email-tx"></span>
+      </div>
+      <label class="ga-campo" data-modo="novo senha">Senha<span class="ga-du-senha"><input type="text" id="ga-du-senha" autocomplete="new-password" spellcheck="false"><button type="button" class="m-bt" id="ga-du-gerar">Gerar outra</button></span></label>
+      <label class="ga-check" data-modo="novo"><input type="checkbox" id="ga-du-soapp" checked> Só usa o app de campo (sem telas no site do sistema Mariuá)</label>
+      <p class="ga-du-msg" id="ga-du-msg" role="alert"></p>
+      <div class="ga-entrega" id="ga-du-entrega" hidden>
+        <b>Passe para o encarregado</b>
+        <pre id="ga-du-entrega-tx"></pre>
+        <div class="ga-entrega-bts">
+          <button type="button" class="m-bt" id="ga-du-copiar"><i class="ti ti-copy" aria-hidden="true"></i>Copiar</button>
+          <a class="m-bt" id="ga-du-whats" target="_blank" rel="noopener"><i class="ti ti-brand-whatsapp" aria-hidden="true"></i>Enviar por WhatsApp</a>
+        </div>
+      </div>
+    </div>
+    <div class="ga-dlg-bts">
+      <button type="button" class="m-bt" id="ga-du-cancelar">Cancelar</button>
+      <button type="submit" class="m-bt m-bt-pri" id="ga-du-salvar">Criar usuário</button>
+    </div>
+  </form>
+</dialog>
 <div class="m-toast" id="ga-toast" role="status" aria-live="polite"></div>
 
 <script src="campo/vendor/supabase-2.118.0.js"></script>

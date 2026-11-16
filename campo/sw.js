@@ -5,9 +5,9 @@
    Os celulares percebem a mudança ao abrir o app, ao voltar para ele e a cada
    15 minutos com ele aberto, e mostram "Nova versão do app" com o botão
    Atualizar agora. As NOVIDADES aparecem nesse aviso (até 3 linhas curtas). */
-var VERSAO = '1.2.4';
+var VERSAO = '1.2.5';
 var NOVIDADES = [
-  'Abre o modo de teste enquanto o sistema não está ligado ao banco'
+  'Aviso claro quando a conta estiver desativada'
 ];
 
 var CACHE = 'rdo-campo-' + VERSAO;

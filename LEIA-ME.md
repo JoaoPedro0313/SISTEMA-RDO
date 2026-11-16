@@ -4,7 +4,7 @@ Sistema separado do site turno-hoje, com duas partes. A **gestão**, para o escr
 
 ## O que tem no repositório
 
-O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão, e o `modo.js` diz se o sistema abre em modo de teste ou no real. O `rdo-app.js` abre o RDO com as fotos, importa a lista de serviços e mostra o QR code de instalação. O `rdo_campo.sql` tem tudo o que o banco precisa. A pasta `campo/` é o app, a pasta `demo/` é o modo de teste, e as pastas `baixar/` e `apk/` são a página de download e os APKs para Android. O `logo-mariua.png` é o logo usado na gestão e na impressão do RDO.
+O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão, e o `modo.js` diz se o sistema abre em modo de teste ou no real. O `rdo-app.js` abre o RDO com as fotos, importa a lista de serviços e mostra o QR code de instalação. O `rdo_campo.sql` tem tudo o que o banco precisa, e o `rdo_usuarios.sql` só a parte da senha nova, para quem já rodou o primeiro. A pasta `campo/` é o app, a pasta `demo/` é o modo de teste, e as pastas `baixar/` e `apk/` são a página de download e os APKs para Android. O `logo-mariua.png` é o logo usado na gestão e na impressão do RDO.
 
 ## Como colocar no ar
 
@@ -34,9 +34,15 @@ Na gestão entram os gestores (os mesmos do sistema Mariuá) e quem um gestor li
 
 O login é por usuário e senha, nas duas partes. O usuário é o começo do e-mail da conta, antes do @ (joao.araujo para joao.araujo@empresa), e o e-mail inteiro também funciona. Se não houver e-mail com esse começo, o sistema procura pela matrícula do cadastro.
 
+## Usuários (contas do app)
+
+A aba **Usuários** da gestão lista as contas, com matrícula, equipe, último uso do app e situação, e só o gestor mexe nela. Em **Novo usuário**, procure a pessoa no cadastro de funcionários (o nome e a matrícula se preenchem sozinhos), confira o usuário sugerido e a senha, e clique em Criar usuário: o sistema mostra o texto pronto para passar ao encarregado, com um botão para enviar pelo WhatsApp. O encarregado entra no app com esse usuário, que é o começo do e-mail da conta. Na mesma aba dá para editar nome e matrícula, definir uma **senha nova** para quem esqueceu e **desativar** uma conta: quem é desativado não entra mais no app, na gestão nem no sistema Mariuá, e os RDOs dele continuam guardados.
+
+As contas são as mesmas do sistema Mariuá: a aba usa as funções que o Admin de lá já usa (`admin_criar_usuario`, `admin_listar_usuarios`, `admin_atualizar_usuario`, `admin_set_ativo` e `admin_buscar_funcionarios`), então quem é criado num lugar aparece no outro. Só a senha nova precisa de uma função a mais: rode uma vez o `rdo_usuarios.sql` no Supabase (ela também já está no `rdo_campo.sql`). Quando outra pessoa entra no app num aparelho dividido, como um tablet, o app pede a equipe de novo.
+
 ## A gestão
 
-A Visão geral mostra os números do período (RDOs recebidos, equipes que mandaram, fotos, horas paradas, serviços fora da lista e celulares com fila parada), quem estava programado hoje e ainda não mandou RDO, e o que precisa ser conferido. Em RDOs ficam todos os RDOs do período, com busca, filtros, o RDO completo com fotos e download em CSV. Produção soma a quantidade de cada serviço da lista, por serviço ou por equipe, também com CSV. Equipes mostra a situação de cada equipe do Cadastro, e Celulares mostra a versão do app, o último contato e a fila de envio de cada celular. Em Configurações, o gestor define o recado para os encarregados, as fotos mínimas por RDO, se o horário de término é obrigatório, os motivos de paralisação e a versão mínima do app, além da lista de serviços, do QR code e do acesso à gestão.
+A Visão geral mostra os números do período (RDOs recebidos, equipes que mandaram, fotos, horas paradas, serviços fora da lista e celulares com fila parada), quem estava programado hoje e ainda não mandou RDO, e o que precisa ser conferido. Em RDOs ficam todos os RDOs do período, com busca, filtros, o RDO completo com fotos e download em CSV. Produção soma a quantidade de cada serviço da lista, por serviço ou por equipe, também com CSV. Equipes mostra a situação de cada equipe do Cadastro, e Celulares mostra a versão do app, o último contato e a fila de envio de cada celular. Em Usuários, o gestor cria e gerencia as contas. Em Configurações, o gestor define o recado para os encarregados, as fotos mínimas por RDO, se o horário de término é obrigatório, os motivos de paralisação e a versão mínima do app, além da lista de serviços, do QR code e do acesso à gestão.
 
 ## O app de campo
 

@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var VERSAO_APP = '1.2.3';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
+  var VERSAO_APP = '1.2.5';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
   var MOTIVOS_PADRAO = ['Chuva', 'Falta de material', 'Desligamento não liberado', 'Interferência de terceiros',
     'Veículo ou equipamento', 'Acidente ou incidente', 'Outro'];
   var CLIMA = { bom: 'Bom', nublado: 'Nublado', chuva: 'Chuva', impraticavel: 'Impraticável' };
@@ -185,6 +185,7 @@
 
   function renderTudo() {
     renderGeral(); renderRdos(); renderProducao(); renderEquipes(); renderCelulares(); renderConfig(); carregarAcessos();
+    if (G.aba === 'usuarios') carregarUsuarios(true); else if (U.carregado) renderUsuarios();
   }
 
   // ─── visão geral ────────────────────────────────────────────────────────
@@ -510,6 +511,259 @@
     return true;
   }
 
+  // ─── usuários (contas do app e da gestão) ───────────────────────────────
+  // Usa as mesmas funções do Admin do sistema Mariuá (admin_*): a conta criada
+  // aqui aparece lá, e o contrário também. Só gestor vê a lista e mexe nas contas.
+  var PUBLICOS = /^(gmail|googlemail|hotmail|outlook|live|msn|yahoo|ymail|icloud|me|bol|uol|terra|ig|globo|r7|zipmail|protonmail|proton|aol)\./i;
+  var U = { lista: [], carregado: false, carregando: false, erro: null, modo: null, alvo: null, usuarioManual: false, dominio: '', tBusca: null };
+
+  function usuarioDe(email) { return String(email || '').split('@')[0].toLowerCase(); }
+  function ativoDe(u) { return u.ativo !== false; }
+  function acharDominio() {
+    var cont = {};
+    U.lista.map(function (u) { return u.email; }).concat([(window.MARIUA_USER || {}).email]).forEach(function (e) {
+      var d = String(e || '').toLowerCase().split('@')[1];
+      if (d && !PUBLICOS.test(d)) cont[d] = (cont[d] || 0) + 1;
+    });
+    var melhor = '';
+    Object.keys(cont).forEach(function (d) { if (!melhor || cont[d] > cont[melhor]) melhor = d; });
+    return melhor;
+  }
+  function sugerirUsuario(nome) {
+    var p = String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/)
+      .filter(function (x) { return x && ['da', 'de', 'do', 'das', 'dos', 'e'].indexOf(x) < 0; });
+    return !p.length ? '' : p.length === 1 ? p[0] : p[0] + '.' + p[p.length - 1];
+  }
+  function equipeDoUsuario(u) {
+    var mat = String(u.matricula || '').trim(), n = norm(u.func_nome || u.nome || '');
+    var q = mat ? G.equipes.filter(function (e) { return String(e.matricula || '').trim() === mat; })[0] : null;
+    if (!q && n) q = G.equipes.filter(function (e) { var en = norm(e.encarregado); return en && (en === n || en.indexOf(n) === 0 || n.indexOf(en) === 0); })[0];
+    return q ? q.codigo : '';
+  }
+  function ultimoUso(email) {
+    var e = String(email || '').toLowerCase(), t = '';
+    G.aparelhos.forEach(function (a) { if (String(a.usuario || '').toLowerCase() === e && String(a.ultimo_contato || '') > t) t = a.ultimo_contato; });
+    return t;
+  }
+  function papelDe(u) {
+    if (u.gestor) return 'Gestor';
+    var e = String(u.email || '').toLowerCase();
+    return (G.acessos || []).some(function (a) { return String(a.email || '').toLowerCase() === e; }) ? 'Escritório' : 'App';
+  }
+
+  async function carregarUsuarios(forcar) {
+    if (!$('ga-usu-corpo')) return;
+    $('ga-usu-novo').hidden = !G.gestor;
+    if (!G.gestor) {
+      $('ga-usu-aviso').textContent = 'Só gestor vê e muda as contas de usuário. Peça a um gestor para criar a conta ou trocar a senha de um encarregado.';
+      $('ga-usu-aviso').hidden = false; $('ga-usu-tabela').hidden = true; $('ga-usu-resumo').textContent = '';
+      return;
+    }
+    if (U.carregando) return;
+    if (U.carregado && !forcar) { renderUsuarios(); return; }
+    U.carregando = true;
+    if (!U.carregado) $('ga-usu-corpo').innerHTML = '<tr><td colspan="7">' + vazio('Carregando os usuários…', 'loader-2') + '</td></tr>';
+    var r = await G.sb.rpc('admin_listar_usuarios');
+    U.carregando = false;
+    if (r.error) { U.erro = r.error; renderUsuarios(); return; }
+    U.erro = null; U.lista = Array.isArray(r.data) ? r.data : []; U.carregado = true;
+    U.dominio = acharDominio();
+    renderUsuarios();
+  }
+
+  function renderUsuarios() {
+    var corpo = $('ga-usu-corpo'); if (!corpo || !G.gestor) return;
+    $('ga-usu-tabela').hidden = false; $('ga-usu-aviso').hidden = true;
+    if (U.erro) {
+      var m = String(U.erro.message || U.erro);
+      corpo.innerHTML = '<tr><td colspan="7">' + caixaErro(/could not find|admin_listar_usuarios/i.test(m)
+        ? 'Este banco não tem a função admin_listar_usuarios, a mesma que o Admin do sistema Mariuá usa para listar as contas.'
+        : erroBanco(U.erro, 'a lista de usuários')) + '</td></tr>';
+      $('ga-usu-resumo').textContent = '';
+      return;
+    }
+    var busca = norm($('ga-usu-busca').value), inativos = $('ga-usu-inativos').checked;
+    var linhas = U.lista.map(function (u) { return { u: u, equipe: equipeDoUsuario(u), uso: ultimoUso(u.email), papel: papelDe(u), ativo: ativoDe(u) }; });
+    var ativos = linhas.filter(function (l) { return l.ativo; }).length, desat = linhas.length - ativos;
+    var usaram = linhas.filter(function (l) { return l.uso && Date.now() - new Date(l.uso).getTime() < 7 * DIA; }).length;
+    $('ga-usu-resumo').textContent = ativos + (ativos === 1 ? ' conta ativa' : ' contas ativas') +
+      (desat ? ', ' + desat + (desat === 1 ? ' desativada' : ' desativadas') : '') + '. ' + usaram + ' ' + (usaram === 1 ? 'usou' : 'usaram') + ' o app nos últimos 7 dias.';
+    var vis = linhas.filter(function (l) {
+      if (!inativos && !l.ativo) return false;
+      return !busca || norm([l.u.nome, l.u.func_nome, l.u.email, l.u.matricula, l.equipe].join(' ')).indexOf(busca) >= 0;
+    }).sort(function (a, b) { return (b.ativo - a.ativo) || norm(a.u.nome || a.u.email).localeCompare(norm(b.u.nome || b.u.email)); });
+    var eu = String((window.MARIUA_USER || {}).email || '').toLowerCase();
+    corpo.innerHTML = vis.length ? vis.map(function (l) {
+      var u = l.u, e = String(u.email || ''), proprio = e.toLowerCase() === eu;
+      return '<tr' + (l.ativo ? '' : ' class="ga-inativo"') + ' data-email="' + esc(e) + '">' +
+        '<td><span class="m-tit">' + esc(u.nome || u.func_nome || usuarioDe(e)) + '</span><div class="m-sub">' + esc(e) + '</div></td>' +
+        '<td>' + esc(u.matricula || '—') + '</td>' +
+        '<td>' + (l.equipe ? '<span class="m-cod">' + esc(l.equipe) + '</span>' : '<span class="m-sub">—</span>') + '</td>' +
+        '<td>' + esc(l.papel) + '</td>' +
+        '<td>' + (l.uso ? esc(haQuanto(l.uso)) + '<div class="m-sub">' + esc(quando(l.uso)) + '</div>' : '<span class="m-sub">ainda não usou</span>') + '</td>' +
+        '<td>' + (l.ativo ? selo('Ativa', 'ga-ok') : selo('Desativada', 'critico')) + '</td>' +
+        '<td><div class="ga-usu-acoes">' +
+          '<button type="button" class="m-bt m-bt-peq" data-u-acao="editar">Editar</button>' +
+          '<button type="button" class="m-bt m-bt-peq" data-u-acao="senha">Nova senha</button>' +
+          '<button type="button" class="m-bt m-bt-peq" data-u-acao="ativo"' + (proprio ? ' disabled title="Você não pode desativar a sua própria conta"' : '') + '>' + (l.ativo ? 'Desativar' : 'Reativar') + '</button>' +
+        '</div></td></tr>';
+    }).join('') : '<tr><td colspan="7">' + vazio(busca ? 'Nenhum usuário encontrado com essa busca.' : 'Nenhuma conta cadastrada ainda. Use o botão Novo usuário.', 'users') + '</td></tr>';
+  }
+
+  function gerarSenha() { var a = new Uint32Array(1); crypto.getRandomValues(a); return String(100000 + a[0] % 900000); }
+  function emailNovo() {
+    var u = $('ga-du-usuario').value.trim().toLowerCase(), d = $('ga-du-dominio').value.trim().toLowerCase().replace(/^@/, '');
+    return u && d ? u + '@' + d : '';
+  }
+  function atualizarEmailTx() {
+    var e = emailNovo();
+    $('ga-du-email-tx').textContent = e
+      ? 'Ele entra no app com “' + usuarioDe(e) + '”. O e-mail da conta fica ' + e + '.'
+      : 'Escolha o usuário e confira o domínio do e-mail da empresa.';
+  }
+  function abrirDialogoUsuario(modo, u) {
+    U.modo = modo; U.alvo = u || null; U.usuarioManual = false;
+    var d = $('ga-dlg-usu');
+    $('ga-du-tit').textContent = modo === 'novo' ? 'Novo usuário' : modo === 'editar' ? 'Editar usuário' : 'Nova senha';
+    $('ga-du-sub').textContent = u ? (u.nome || u.func_nome || usuarioDe(u.email)) + ', ' + u.email : 'A conta vale para o app de campo, a gestão e o sistema Mariuá.';
+    d.querySelectorAll('[data-modo]').forEach(function (el) { el.hidden = el.dataset.modo.split(' ').indexOf(modo) < 0; });
+    $('ga-du-func').value = ''; $('ga-du-func-lista').innerHTML = '';
+    $('ga-du-nome').value = u ? (u.nome || '') : '';
+    $('ga-du-mat').value = u ? (u.matricula || '') : '';
+    $('ga-du-usuario').value = '';
+    $('ga-du-dominio').value = U.dominio || '';
+    $('ga-du-senha').value = modo === 'editar' ? '' : gerarSenha();
+    $('ga-du-soapp').checked = true;
+    $('ga-du-msg').textContent = '';
+    $('ga-du-entrega').hidden = true;
+    $('ga-du-cancelar').hidden = false;
+    $('ga-du-salvar').disabled = false;
+    $('ga-du-salvar').textContent = modo === 'novo' ? 'Criar usuário' : modo === 'editar' ? 'Salvar' : 'Trocar a senha';
+    atualizarEmailTx();
+    d.showModal();
+    setTimeout(function () { (modo === 'senha' ? $('ga-du-senha') : modo === 'novo' ? $('ga-du-func') : $('ga-du-nome')).focus(); }, 50);
+  }
+  function mostrarEntrega(usuario, senha, titulo) {
+    var link = window.RDO_LINK_INSTALAR || new URL('baixar/', location.href).href;
+    var tx = 'Usuário: ' + usuario + '\nSenha: ' + senha + '\nBaixe o app: ' + link;
+    $('ga-du-entrega-tx').textContent = tx;
+    $('ga-du-whats').href = 'https://wa.me/?text=' + encodeURIComponent('Seu acesso ao app RDO Mariuá\n' + tx);
+    $('ga-dlg-usu').querySelectorAll('[data-modo]').forEach(function (el) { el.hidden = true; });
+    $('ga-du-entrega').hidden = false;
+    $('ga-du-msg').textContent = '';
+    $('ga-du-sub').textContent = titulo + ' Anote ou envie agora: a senha não aparece de novo.';
+    $('ga-du-cancelar').hidden = true;
+    $('ga-du-salvar').textContent = 'Fechar';
+  }
+  async function salvarUsuario(ev) {
+    ev.preventDefault();
+    var msg = $('ga-du-msg'), bt = $('ga-du-salvar');
+    if (!$('ga-du-entrega').hidden) { $('ga-dlg-usu').close(); return; }      // depois de criar, o botão vira Fechar
+    msg.textContent = '';
+    var nome = $('ga-du-nome').value.trim(), mat = $('ga-du-mat').value.trim(), senha = $('ga-du-senha').value.trim();
+    if (U.modo !== 'senha' && nome.length < 3) { msg.textContent = 'Escreva o nome completo.'; $('ga-du-nome').focus(); return; }
+    if (U.modo !== 'editar' && senha.length < 6) { msg.textContent = 'A senha precisa de pelo menos 6 caracteres.'; $('ga-du-senha').focus(); return; }
+    var email = U.alvo ? U.alvo.email : emailNovo();
+    if (U.modo === 'novo') {
+      var usu = $('ga-du-usuario').value.trim().toLowerCase(), dom = $('ga-du-dominio').value.trim().toLowerCase().replace(/^@/, '');
+      if (!/^[a-z0-9][a-z0-9._-]{2,}$/.test(usu)) { msg.textContent = 'O usuário precisa ter pelo menos 3 letras ou números, sem espaço nem acento. Pode usar ponto, como joao.silva.'; $('ga-du-usuario').focus(); return; }
+      if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(dom)) { msg.textContent = 'Escreva o domínio do e-mail da empresa, como empresa.com.br.'; $('ga-du-dominio').focus(); return; }
+      var igual = U.lista.filter(function (x) { return usuarioDe(x.email) === usu; })[0];
+      if (igual) { msg.textContent = 'Já existe uma conta com o usuário “' + usu + '” (' + igual.email + '). Escolha outro, por exemplo com o segundo sobrenome.'; $('ga-du-usuario').focus(); return; }
+    }
+    var antes = bt.textContent; bt.disabled = true; bt.textContent = 'Salvando…';
+    try {
+      var r;
+      if (U.modo === 'novo') {
+        r = await G.sb.rpc('admin_criar_usuario', { p_email: email, p_senha: senha, p_nome: nome, p_gestor: false, p_telefone: null, p_vigencia: null, p_matricula: mat || null });
+        if (r.error) throw r.error;
+        if ($('ga-du-soapp').checked) { try { await G.sb.rpc('admin_set_telas', { p_email: email, p_telas: [] }); } catch (x) { /* fica com as telas padrão */ } }
+        mostrarEntrega(usuarioDe(email), senha, 'Conta criada.');
+        toast('Conta criada para ' + nome + '.');
+      } else if (U.modo === 'editar') {
+        r = await G.sb.rpc('admin_atualizar_usuario', { p_email: email, p_nome: nome, p_telefone: U.alvo.telefone || null, p_vigencia: U.alvo.data_vigencia || null, p_matricula: mat || null });
+        if (r.error) throw r.error;
+        $('ga-dlg-usu').close();
+        toast('Dados de ' + nome + ' salvos.');
+      } else {
+        r = await G.sb.rpc('rdo_campo_definir_senha', { p_email: email, p_senha: senha });
+        if (r.error) throw r.error;
+        mostrarEntrega(usuarioDe(email), senha, 'Senha trocada.');
+        toast('Senha de ' + usuarioDe(email) + ' trocada.');
+      }
+      carregarUsuarios(true);
+    } catch (er) {
+      var m = String((er && er.message) || er);
+      if (U.modo === 'senha' && /rdo_campo_definir_senha|could not find the function/i.test(m)) m = 'Falta rodar o rdo_usuarios.sql no Supabase (SQL Editor, Run) para trocar senhas por aqui.';
+      else if (/already|registered|duplicate|unique|existe/i.test(m)) m = 'Já existe uma conta com esse e-mail. Escolha outro usuário.';
+      msg.textContent = m;
+    } finally {
+      bt.disabled = false;
+      if ($('ga-du-entrega').hidden) bt.textContent = antes;
+    }
+  }
+  function buscarFuncionario() {
+    clearTimeout(U.tBusca);
+    var termo = $('ga-du-func').value.trim();
+    var m = termo.match(/^(\S+)\s+—\s+(.+)$/);              // escolheu uma linha da lista
+    if (m) { escolherFuncionario(m[1], m[2].replace(/\s+\([^)]*\)$/, '')); return; }
+    if (termo.length < 2) return;
+    U.tBusca = setTimeout(async function () {
+      var r = await G.sb.rpc('admin_buscar_funcionarios', { p_termo: termo });
+      if (r.error || !Array.isArray(r.data)) return;
+      $('ga-du-func-lista').innerHTML = r.data.slice(0, 30).map(function (f) {
+        return '<option value="' + esc(f.matricula + ' — ' + f.nome + (f.situacao && f.situacao !== 'ATIVO' ? ' (' + String(f.situacao).toLowerCase() + ')' : '')) + '">';
+      }).join('');
+    }, 250);
+  }
+  function nomeBonito(n) {      // ANA PAULA DE SOUZA → Ana Paula de Souza
+    return String(n || '').toLowerCase().replace(/\s+/g, ' ').trim().split(' ').map(function (p) {
+      return ['da', 'de', 'do', 'das', 'dos', 'e'].indexOf(p) >= 0 ? p : p.charAt(0).toUpperCase() + p.slice(1);
+    }).join(' ');
+  }
+  function escolherFuncionario(mat, nome) {
+    nome = nomeBonito(nome);
+    $('ga-du-mat').value = mat; $('ga-du-nome').value = nome; $('ga-du-func').value = '';
+    if (U.modo === 'novo' && !U.usuarioManual) { $('ga-du-usuario').value = sugerirUsuario(nome); atualizarEmailTx(); }
+  }
+  async function alternarAtivo(u) {
+    var ativo = ativoDe(u), nome = u.nome || usuarioDe(u.email);
+    var pergunta = ativo
+      ? 'Desativar a conta de ' + nome + '? Ela deixa de entrar no app, na gestão e no sistema Mariuá. Os RDOs dela continuam guardados.'
+      : 'Reativar a conta de ' + nome + '? Ela volta a entrar com a mesma senha de antes.';
+    if (!confirm(pergunta)) return;
+    var r = await G.sb.rpc('admin_set_ativo', { p_email: u.email, p_ativo: !ativo });
+    if (r.error) { toast('Não deu: ' + r.error.message); return; }
+    toast(ativo ? 'Conta de ' + nome + ' desativada.' : 'Conta de ' + nome + ' reativada.');
+    carregarUsuarios(true);
+  }
+  function ligarUsuarios() {
+    $('ga-usu-busca').addEventListener('input', renderUsuarios);
+    $('ga-usu-inativos').addEventListener('change', renderUsuarios);
+    $('ga-usu-novo').addEventListener('click', function () { abrirDialogoUsuario('novo'); });
+    $('ga-usu-corpo').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-u-acao]'); if (!b || b.disabled) return;
+      var email = b.closest('tr').dataset.email;
+      var u = U.lista.filter(function (x) { return x.email === email; })[0]; if (!u) return;
+      if (b.dataset.uAcao === 'ativo') alternarAtivo(u); else abrirDialogoUsuario(b.dataset.uAcao, u);
+    });
+    $('ga-du-form').addEventListener('submit', salvarUsuario);
+    $('ga-du-cancelar').addEventListener('click', function () { $('ga-dlg-usu').close(); });
+    $('ga-du-gerar').addEventListener('click', function () { $('ga-du-senha').value = gerarSenha(); });
+    $('ga-du-func').addEventListener('input', buscarFuncionario);
+    $('ga-du-func').addEventListener('change', buscarFuncionario);
+    $('ga-du-nome').addEventListener('input', function () {
+      if (U.modo === 'novo' && !U.usuarioManual) { $('ga-du-usuario').value = sugerirUsuario(this.value); atualizarEmailTx(); }
+    });
+    $('ga-du-usuario').addEventListener('input', function () { U.usuarioManual = true; atualizarEmailTx(); });
+    $('ga-du-dominio').addEventListener('input', atualizarEmailTx);
+    $('ga-du-copiar').addEventListener('click', function () {
+      var tx = $('ga-du-entrega-tx').textContent, bt = this;
+      var feito = function () { bt.lastChild.textContent = 'Copiado'; setTimeout(function () { bt.lastChild.textContent = 'Copiar'; }, 1800); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(feito, function () {});
+    });
+  }
+
   // ─── CSV ────────────────────────────────────────────────────────────────
   function baixarCsv(nome, linhas) {
     var csv = '\uFEFF' + linhas.map(function (l) {
@@ -561,6 +815,7 @@
     });
     document.querySelectorAll('.ga-painel').forEach(function (p) { p.hidden = p.id !== 'ga-' + aba; });
     try { history.replaceState(null, '', '#' + aba); } catch (e) {}
+    if (aba === 'usuarios' && G.papel) carregarUsuarios(false);
   }
   function filtrarRdos(f) {
     G.filtros = {}; G.filtros[f] = true;
@@ -640,10 +895,10 @@
 
   function iniciar() {
     lerVersaoPublicada();
-    if (!G.ligado) { ligar(); G.ligado = true; }
+    if (!G.ligado) { ligar(); ligarUsuarios(); G.ligado = true; }
     aplicarPeriodo('7');
     var aba = (location.hash || '').replace('#', '');
-    abrirAba(['geral', 'rdos', 'producao', 'equipes', 'celulares', 'config'].indexOf(aba) >= 0 ? aba : 'geral');
+    abrirAba(['geral', 'rdos', 'producao', 'equipes', 'celulares', 'usuarios', 'config'].indexOf(aba) >= 0 ? aba : 'geral');
     carregar();
     if (!G.relogio) G.relogio = setInterval(function () { if (document.visibilityState === 'visible' && G.papel) carregar(); }, 3 * 60 * 1000);
   }
@@ -670,6 +925,7 @@
   function traduzLogin(e) {
     var m = String((e && e.message) || e || '');
     if (/invalid login credentials|usuario-nao-encontrado/i.test(m)) return 'Usuário ou senha incorretos.';
+    if (/banned|desativad/i.test(m)) return 'Esta conta está desativada. Fale com um gestor.';
     if (/mais de uma conta/i.test(m)) return m;
     if (/rdo_campo_email_login|could not find the function/i.test(m)) return 'Por enquanto, entre com o e-mail completo: o banco ainda não tem o login por usuário (rdo_campo.sql).';
     if (/fetch|network|load failed/i.test(m)) return 'Sem conexão com o banco. Confira a internet.';
@@ -750,6 +1006,7 @@
     var sair = async function () {
       try { await G.sb.auth.signOut({ scope: 'local' }); } catch (e) {}
       G.user = null; G.papel = null; window.MARIUA_USER = null;
+      U.lista = []; U.carregado = false; U.erro = null;
       mostrarLogin();
     };
     $('g-sair').addEventListener('click', sair);

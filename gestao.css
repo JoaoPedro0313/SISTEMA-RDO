@@ -288,3 +288,34 @@ body{padding-left:0}
 .ga-acesso-novo .m-select{flex:1;min-width:200px;max-width:none}
 .ga-lista .ga-acesso-it{display:flex;align-items:center;justify-content:space-between;gap:10px}
 @media(max-width:640px){.top-bar-center{display:none}.g-quem span{display:none}}
+
+/* ───────── aba Usuários ───────── */
+.ga-barra-usu{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 18px;border-bottom:1px solid #edf2f7}
+.ga-barra-usu input[type=search]{border:0;outline:0;flex:1;min-width:0;font-family:'Barlow',sans-serif;font-size:.86rem;font-weight:600;color:#2d3748;background:transparent}
+.ga-check{display:inline-flex;align-items:center;gap:7px;font-size:.84rem;font-weight:700;color:#4a5568;cursor:pointer}
+.ga-check input{width:16px;height:16px;accent-color:#0d7377}
+.ga-usu-aviso{padding:16px 18px;margin:0}
+.ga-usu-acoes{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+tr.ga-inativo td{opacity:.62}
+.ga-oculto{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ga-dlg{margin:auto;border:0;border-radius:16px;padding:0;width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 32px);box-shadow:0 24px 70px rgba(10,40,44,.3);color:#1f2a35}
+.ga-dlg::backdrop{background:rgba(10,30,32,.45)}
+.ga-dlg form{display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
+.ga-dlg-cab{padding:18px 22px 12px;border-top:4px solid #ff6b35;border-bottom:1px solid #edf2f7}
+.ga-dlg-cab h3{font-size:1.2rem;font-weight:800;color:#0b5e62;margin:0 0 3px}
+.ga-dlg-corpo{padding:16px 22px;display:flex;flex-direction:column;gap:13px;overflow:auto}
+.ga-dlg-corpo input[type=text]{padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:'Barlow',sans-serif;font-size:.95rem;font-weight:600;color:#2d3748;background:#fff;width:100%;min-width:0}
+.ga-dlg-corpo input[type=text]:focus{border-color:#14a085;outline:none}
+.ga-du-login{display:flex;align-items:center;gap:6px}
+.ga-du-login span{font-weight:800;color:#7b8794}
+.ga-du-senha{display:flex;gap:8px}
+.ga-du-senha input{font-size:1.05rem !important;letter-spacing:1px}
+.ga-du-msg{margin:0;font-size:.86rem;font-weight:700;color:#c53030}
+.ga-du-msg:empty{display:none}
+.ga-entrega{background:#f0fafa;border:1.5px solid #b9e3df;border-radius:12px;padding:12px 14px}
+.ga-entrega b{color:#0b5e62}
+.ga-entrega pre{margin:8px 0 12px;font-family:'Barlow',sans-serif;font-size:1rem;font-weight:700;line-height:1.5;white-space:pre-wrap;word-break:break-word;color:#1f2a35}
+.ga-entrega-bts{display:flex;gap:8px;flex-wrap:wrap}
+.ga-entrega-bts .m-bt{text-decoration:none}
+.ga-dlg-bts{display:flex;justify-content:flex-end;gap:8px;padding:12px 22px 18px;border-top:1px solid #edf2f7}
+.ga-dlg [hidden]{display:none !important}
