@@ -2,6 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<script src="modo.js"></script>
+<script>if (window.RDO_MODO === 'teste') location.replace('demo/');</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistema RDO · Mariuá</title>
 <link rel="icon" href="campo/icons/favicon-32.png" sizes="32x32">
@@ -62,6 +64,7 @@
     <h1>Sem acesso à gestão</h1>
     <p class="g-sub" id="g-sem-tx"></p>
     <a class="m-bt m-bt-pri" href="campo/">Abrir o app de campo</a>
+    <a class="m-bt" href="demo/">Usar o modo de teste</a>
     <button type="button" class="g-link" id="g-sair2">Entrar com outro usuário</button>
   </div>
 </section>

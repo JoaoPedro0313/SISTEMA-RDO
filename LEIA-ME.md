@@ -4,7 +4,7 @@ Sistema separado do site turno-hoje, com duas partes. A **gestão**, para o escr
 
 ## O que tem no repositório
 
-O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão. O `rdo-app.js` abre o RDO com as fotos, importa a lista de serviços e mostra o QR code de instalação. O `rdo_campo.sql` tem tudo o que o banco precisa. A pasta `campo/` é o app, a pasta `demo/` é o modo de teste, e as pastas `baixar/` e `apk/` são a página de download e os APKs para Android. O `logo-mariua.png` é o logo usado na gestão e na impressão do RDO.
+O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão, e o `modo.js` diz se o sistema abre em modo de teste ou no real. O `rdo-app.js` abre o RDO com as fotos, importa a lista de serviços e mostra o QR code de instalação. O `rdo_campo.sql` tem tudo o que o banco precisa. A pasta `campo/` é o app, a pasta `demo/` é o modo de teste, e as pastas `baixar/` e `apk/` são a página de download e os APKs para Android. O `logo-mariua.png` é o logo usado na gestão e na impressão do RDO.
 
 ## Como colocar no ar
 
@@ -13,6 +13,10 @@ Primeiro, no Supabase, abra SQL Editor → New query, cole o `rdo_campo.sql` int
 Para o "Esqueci a senha" voltar para o Sistema RDO, no Supabase, em Authentication → URL Configuration → Redirect URLs, acrescente `https://joaopedro0313.github.io/SISTEMA-RDO/**`. Sem isso, o link de senha nova continua indo para o site do sistema Mariuá, que também funciona.
 
 Por fim, entre na gestão com um usuário gestor, importe a lista de serviços e libere o acesso das pessoas do escritório, as duas coisas em Configurações. O botão "Instalar no celular" mostra o QR code e o link do app para os encarregados.
+
+## Modo do sistema: teste ou real
+
+O arquivo `modo.js`, na raiz, diz em que modo o sistema abre. Com `'teste'`, como está agora, todos os endereços abrem o modo de teste: `…/SISTEMA-RDO/` vai para a gestão de teste e `…/SISTEMA-RDO/campo/` para o app de teste, inclusive pelo APK RDO Mariuá. Quando o banco estiver pronto, com o `rdo_campo.sql` rodado no Supabase, troque para `'real'`: no GitHub, abra o `modo.js`, clique no lápis (Edit), troque `teste` por `real` e clique em Commit changes. Em um ou dois minutos o sistema de verdade volta a abrir, com login. Os dados do teste ficam guardados à parte e não se misturam com os de verdade.
 
 ## Baixar o app (APK)
 
