@@ -2,14 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<script src="modo.js"></script>
-<script>if (window.RDO_MODO === 'teste') location.replace('demo/');</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sistema RDO · Mariuá</title>
-<link rel="icon" href="campo/icons/favicon-32.png" sizes="32x32">
+<title>Teste · Sistema RDO · Mariuá</title>
+<link rel="icon" href="../campo/icons/favicon-32.png" sizes="32x32">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
-<link rel="stylesheet" href="gestao.css?v=3">
+<link rel="stylesheet" href="../gestao.css?v=3">
 </head>
 <body>
 <div class="top-bar">
@@ -42,7 +40,7 @@
     <p class="g-msg" id="g-msg" role="alert"></p>
     <button type="submit" class="m-bt m-bt-pri" id="g-entrar">Entrar</button>
     <button type="button" class="g-link" id="g-esqueci">Esqueci a senha</button>
-    <p class="g-rodape">É encarregado? <a href="baixar/">Baixe o app de campo</a> para o celular.</p>
+    <p class="g-rodape">É encarregado? Use o <a href="campo/">app de teste</a> ou <a href="../baixar/#teste">baixe o RDO Teste</a>.</p>
   </form>
 </section>
 
@@ -64,7 +62,6 @@
     <h1>Sem acesso à gestão</h1>
     <p class="g-sub" id="g-sem-tx"></p>
     <a class="m-bt m-bt-pri" href="campo/">Abrir o app de campo</a>
-    <a class="m-bt" href="demo/">Usar o modo de teste</a>
     <button type="button" class="g-link" id="g-sair2">Entrar com outro usuário</button>
   </div>
 </section>
@@ -282,8 +279,10 @@
 </dialog>
 <div class="m-toast" id="ga-toast" role="status" aria-live="polite"></div>
 
-<script src="campo/vendor/supabase-2.118.0.js"></script>
-<script src="rdo-app.js?v=4"></script>
-<script src="gestao-app.js?v=2"></script>
+<!-- MODO DE TESTE: banco simulado no navegador, no lugar do Supabase -->
+<script src="supabase-teste.js"></script>
+<script>window.RDO_LINK_INSTALAR = new URL('../baixar/#teste', location.href).href;</script>
+<script src="../rdo-app.js?v=4"></script>
+<script src="../gestao-app.js?v=3"></script>
 </body>
 </html>
