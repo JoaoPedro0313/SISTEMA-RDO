@@ -4,4 +4,4 @@
    'real'  → o sistema de verdade, com login e o banco do Supabase.
    Para trocar: no GitHub, abra este arquivo, clique no lápis (Edit), troque a palavra
    entre aspas e clique em Commit changes. */
-window.RDO_MODO = 'teste';
+window.RDO_MODO = 'real';
