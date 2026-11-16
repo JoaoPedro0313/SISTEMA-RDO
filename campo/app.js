@@ -19,7 +19,7 @@
     SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxeGVqZm9pYmViY2J0c3F5bWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NjUzMTEsImV4cCI6MjA4NzQ0MTMxMX0.lwf7_EJ6UchEOpzhW3cVKztxDGy78gaQblRvgiEwWh8',
     TABELA: 'rdo_campo',
     BUCKET: 'rdo-fotos',
-    VERSAO: '1.2.1',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
+    VERSAO: '1.2.2',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
     FOTO_LADO: 1600,        // maior lado da foto enviada (px)
     FOTO_QUALIDADE: 0.72,   // JPEG: ~250–450 KB por foto
     MINI_LADO: 320,         // miniatura guardada no celular
@@ -296,7 +296,7 @@
     if (!usuario) { msg.className = 'msg'; msg.textContent = 'Escreva seu usuário acima e toque de novo em Esqueci a senha.'; $('lg-usuario').focus(); return; }
     try {
       var email = await emailDoUsuario(usuario);
-      var r = await comPrazo(S.sb.auth.resetPasswordForEmail(email), 20000);
+      var r = await comPrazo(S.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('../', location.href).href }), 20000);
       if (r.error) throw r.error;
       msg.className = 'msg ok';
       msg.textContent = 'Enviamos um link para ' + emailEscondido(email) + '. Crie a senha nova por ele e volte aqui para entrar.';

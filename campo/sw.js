@@ -5,10 +5,9 @@
    Os celulares percebem a mudança ao abrir o app, ao voltar para ele e a cada
    15 minutos com ele aberto, e mostram "Nova versão do app" com o botão
    Atualizar agora. As NOVIDADES aparecem nesse aviso (até 3 linhas curtas). */
-var VERSAO = '1.2.1';
+var VERSAO = '1.2.2';
 var NOVIDADES = [
-  'Aviso de versão nova, com o botão Atualizar agora',
-  'Procurar atualização em Ajustes'
+  'Esqueci a senha abre a página do Sistema RDO para criar a senha nova'
 ];
 
 var CACHE = 'rdo-campo-' + VERSAO;
