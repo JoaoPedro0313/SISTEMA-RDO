@@ -1,0 +1,18 @@
+{
+  "name": "RDO de campo · Mariuá",
+  "short_name": "RDO Mariuá",
+  "description": "Relatório diário de obra com fotos, feito pelo encarregado no celular. Funciona sem internet e envia ao sistema Mariuá.",
+  "lang": "pt-BR",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e8efef",
+  "theme_color": "#0a4a4d",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
