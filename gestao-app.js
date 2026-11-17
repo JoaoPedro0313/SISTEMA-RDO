@@ -1136,10 +1136,25 @@
   }
 
   // ─── abas e eventos ─────────────────────────────────────────────────────
+  var SECOES = {
+    geral: ['Visão geral', 'O que chegou dos encarregados no período e o que precisa ser conferido.'],
+    programacao: ['Programação', 'As obras de cada equipe por dia. O encarregado recebe no app.'],
+    rdos: ['RDOs', 'Todos os RDOs do período, com as fotos. Clique num RDO para ver tudo.'],
+    producao: ['Produção', 'Quanto foi feito de cada serviço da lista, somando os RDOs do período.'],
+    equipes: ['Equipes', 'Como cada equipe do Cadastro de Equipes está usando o app.'],
+    celulares: ['Celulares', 'Versão do app, último contato e fila de envio de cada celular.'],
+    usuarios: ['Usuários', 'As contas do app e da gestão, as mesmas do sistema Mariuá.'],
+    config: ['Configurações', 'Como o app funciona, a lista de serviços e quem acessa a gestão.']
+  };
+  var TITULO_PAGINA = document.title;
   function abrirAba(aba) {
     G.aba = aba;
+    var sec = SECOES[aba] || SECOES.geral;
+    $('ga-titulo').textContent = sec[0]; $('ga-sub').textContent = sec[1];
+    document.title = sec[0] + ' · ' + TITULO_PAGINA;
     document.querySelectorAll('.ga-abas [role=tab]').forEach(function (t) {
       var on = t.id === 'ga-t-' + aba; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1;
+      if (on && window.matchMedia('(max-width: 900px)').matches && t.scrollIntoView) t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
     document.querySelectorAll('.ga-painel').forEach(function (p) { p.hidden = p.id !== 'ga-' + aba; });
     try { history.replaceState(null, '', '#' + aba); } catch (e) {}
@@ -1163,10 +1178,12 @@
     $('ga-equipe').addEventListener('change', function () { G.equipe = this.value; renderTudo(); });
     document.querySelector('.ga-abas').addEventListener('click', function (e) { var t = e.target.closest('[role=tab]'); if (t) abrirAba(t.id.replace('ga-t-', '')); });
     document.querySelector('.ga-abas').addEventListener('keydown', function (e) {
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      var frente = e.key === 'ArrowRight' || e.key === 'ArrowDown', tras = e.key === 'ArrowLeft' || e.key === 'ArrowUp';
+      if (!frente && !tras) return;
       var tabs = Array.prototype.slice.call(this.querySelectorAll('[role=tab]')), i = tabs.indexOf(document.activeElement);
       if (i < 0) return;
-      var n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; n.focus(); n.click();
+      e.preventDefault();
+      var n = tabs[(i + (frente ? 1 : tabs.length - 1)) % tabs.length]; n.focus(); n.click();
     });
     var busca; $('ga-busca').addEventListener('input', function () { clearTimeout(busca); busca = setTimeout(renderRdos, 150); });
     var buscaEq; $('ga-busca-eq').addEventListener('input', function () { clearTimeout(buscaEq); buscaEq = setTimeout(renderEquipes, 150); });

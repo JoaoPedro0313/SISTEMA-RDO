@@ -599,7 +599,7 @@
   }
   function marcar() {
     var css = document.createElement('style');
-    css.textContent = '.rdo-teste-tag{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + ' + (TIPO === 'campo' ? '45px' : '58px') + ');z-index:9999;' +
+    css.textContent = '.rdo-teste-tag{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + ' + (TIPO === 'campo' ? '45px' : '10px') + ');z-index:9999;' +
       'border:0;border-radius:999px;padding:5px 12px;background:#ffd166;color:#3a2a00;font:800 11px/1.2 Barlow,system-ui,sans-serif;letter-spacing:1px;' +
       'box-shadow:0 4px 14px rgba(0,0,0,.18);cursor:pointer}' +
       '.rdo-teste-dica{margin:4px 0 0;padding:10px 12px;border-radius:10px;background:#fff7e0;color:#5a4300;font:600 .88rem/1.4 Barlow,system-ui,sans-serif}';
@@ -608,6 +608,7 @@
     b.type = 'button'; b.className = 'rdo-teste-tag'; b.textContent = 'MODO DE TESTE';
     b.title = 'Dados de exemplo, guardados só neste navegador. Toque para recomeçar.';
     b.addEventListener('click', recomecar);
+    if (TIPO !== 'campo') b.style.cssText = 'top:auto;bottom:14px;left:auto;right:14px;transform:none';   // gestão: no canto, longe do Sair
     document.body.appendChild(b);
     // na gestão de teste, o selo do topo avisa que o banco é o de teste
     var selo = document.getElementById('db-text');
