@@ -182,11 +182,12 @@
   // ─── CONTA ───────────────────────────────────────────────────────────────
   function montarConta(user) {
     var md = (user && user.user_metadata) || {};
-    var email = String(user.email || '').toLowerCase();
+    var email = String(user.email || '').toLowerCase(), local = email.split('@')[0];
     return {
       id: user.id, email: email,
-      nome: md.nome || md.full_name || md.name || email.split('@')[0],
-      matricula: String(md.matricula || md.mat || '').trim()
+      nome: md.nome || md.full_name || md.name || local,
+      // a conta criada na gestão tem o e-mail feito com a matrícula (104523@empresa)
+      matricula: String(md.matricula || md.mat || (/^\d+$/.test(local) ? local : '')).trim()
     };
   }
 
@@ -221,39 +222,49 @@
     abrirInicio();
   }
 
-  // ─── LOGIN (usuário e senha) ────────────────────────────────────────────
-  // O usuário é o começo do e-mail (antes do @), como no sistema da
-  // concessionária (JOAO.ARAUJO). O Supabase entra por e-mail: a função
-  // rdo_campo_email_login acha o e-mail da conta. O e-mail inteiro também vale.
+  // ─── LOGIN (matrícula e senha) ──────────────────────────────────────────
+  // O encarregado entra com a matrícula. O Supabase entra por e-mail: a função
+  // rdo_campo_email_login acha a conta pela matrícula (a conta criada na gestão
+  // tem o e-mail feito com ela, 104523@empresa; as antigas têm a matrícula
+  // guardada). O usuário antigo e o e-mail inteiro ainda funcionam, para ninguém
+  // ficar do lado de fora, mas a tela pede só a matrícula.
   function abrirLogin(msg) {
     mostrar('login');
     $('lg-msg').textContent = msg || '';
     $('lg-msg').className = 'msg';
     kvGet('ultimo-usuario').then(function (u) {
       var campo = $('lg-usuario');
-      if (u && !campo.value) campo.value = u;
+      if (u && !campo.value && /^\d+$/.test(u)) campo.value = u;      // só matrícula: o usuário antigo não volta
       setTimeout(function () { (campo.value ? $('lg-senha') : campo).focus(); }, 50);
     });
   }
 
   function traduzErroLogin(e) {
     var m = String((e && e.message) || e || '');
-    if (/invalid login credentials|usuario-nao-encontrado/i.test(m)) return 'Usuário ou senha incorretos.';
+    if (/usuario-nao-encontrado/i.test(m)) return 'Não achamos conta com essa matrícula. Confira o número ou fale com o escritório.';
+    if (/invalid login credentials/i.test(m)) return 'Senha incorreta. Se esqueceu, toque em Esqueci a senha.';
     if (/banned|desativad/i.test(m)) return 'Esta conta está desativada. Fale com o escritório.';
-    if (/mais de uma conta/i.test(m)) return m;
-    if (/rdo_campo_email_login|could not find the function/i.test(m)) return 'Por enquanto, entre com o e-mail completo: o banco ainda não tem o login por usuário (rdo_campo.sql).';
+    if (/mais de uma conta/i.test(m)) return 'Essa matrícula está em mais de uma conta. Peça ao escritório para conferir.';
+    if (/rdo_campo_email_login|could not find the function/i.test(m)) return 'O banco ainda não tem o login por matrícula. Avise o escritório (falta rodar o rdo_campo.sql).';
     if (/email not confirmed/i.test(m)) return 'Esta conta ainda não foi confirmada. Fale com o escritório.';
     if (/fetch|network|load failed|tempo esgotado/i.test(m) || !navigator.onLine) return 'Sem internet. O primeiro acesso precisa de conexão.';
     return 'Não deu para entrar: ' + m;
   }
 
-  async function emailDoUsuario(usuario) {
-    var u = String(usuario || '').trim();
-    if (u.indexOf('@') > 0) return u.toLowerCase();
-    var r = await comPrazo(S.sb.rpc('rdo_campo_email_login', { p_usuario: u }), 15000);
-    if (r.error) throw r.error;
-    if (!r.data) throw new Error('usuario-nao-encontrado');
-    return String(r.data).toLowerCase();
+  // Acha o e-mail da conta pelo que foi digitado. Matrícula digitada com ponto,
+  // traço ou espaço no meio (104.523) é procurada também só com os números.
+  async function contaDoLogin(digitado) {
+    var u = String(digitado || '').trim();
+    if (u.indexOf('@') > 0) return { email: u.toLowerCase(), login: u };
+    var tentativas = [u];
+    if (/^[\d\s.\-]+$/.test(u) && u.replace(/\D/g, '') !== u) tentativas.push(u.replace(/\D/g, ''));
+    for (var i = 0; i < tentativas.length; i++) {
+      if (!tentativas[i]) continue;
+      var r = await comPrazo(S.sb.rpc('rdo_campo_email_login', { p_usuario: tentativas[i] }), 15000);
+      if (r.error) throw r.error;
+      if (r.data) return { email: String(r.data).toLowerCase(), login: tentativas[i] };
+    }
+    throw new Error('usuario-nao-encontrado');
   }
   function emailEscondido(email) {
     var p = String(email).split('@'), n = p[0];
@@ -263,20 +274,23 @@
 
   async function entrar(ev) {
     ev.preventDefault();
-    var usuario = $('lg-usuario').value.trim();
+    var digitado = $('lg-usuario').value.trim();
     var senha = $('lg-senha').value;
     var msg = $('lg-msg'); msg.className = 'msg';
-    if (!usuario) { msg.textContent = 'Escreva seu usuário.'; $('lg-usuario').focus(); return; }
+    if (!digitado) { msg.textContent = 'Escreva sua matrícula.'; $('lg-usuario').focus(); return; }
     if (!senha) { msg.textContent = 'Escreva sua senha.'; $('lg-senha').focus(); return; }
     var bt = $('lg-entrar'); bt.disabled = true; bt.textContent = 'Entrando…';
     try {
-      var email = await emailDoUsuario(usuario);
-      var r = await comPrazo(S.sb.auth.signInWithPassword({ email: email, password: senha }), 20000);
+      var achada = await contaDoLogin(digitado);
+      var r = await comPrazo(S.sb.auth.signInWithPassword({ email: achada.email, password: senha }), 20000);
       if (r.error) throw r.error;
       S.conta = montarConta(r.data.user);
+      if (!S.conta.matricula && /^\d+$/.test(achada.login)) S.conta.matricula = achada.login;
       S.precisaLogin = false;
       await kvSet('conta', S.conta);
-      await kvSet('ultimo-usuario', usuario.indexOf('@') > 0 ? usuarioDaConta(S.conta) : usuario.toLowerCase());
+      // na próxima vez, a tela já vem com a matrícula preenchida
+      var lembrar = /^\d+$/.test(achada.login) ? achada.login : S.conta.matricula;
+      if (lembrar) await kvSet('ultimo-usuario', lembrar); else await kvDel('ultimo-usuario');
       $('lg-senha').value = '';
       try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
       // aparelho dividido (ex.: tablet): se quem escolheu a equipe foi outra conta, escolhe de novo
@@ -288,26 +302,32 @@
       atualizarDoEscritorio(true);
     } catch (e) {
       msg.textContent = traduzErroLogin(e);
-      $('lg-senha').select();
+      (/usuario-nao-encontrado/.test(String(e && e.message)) ? $('lg-usuario') : $('lg-senha')).select();
     } finally {
       bt.disabled = false; bt.textContent = 'Entrar';
     }
   }
 
   async function esqueciSenha() {
-    var usuario = $('lg-usuario').value.trim();
+    var digitado = $('lg-usuario').value.trim();
     var msg = $('lg-msg');
-    if (!usuario) { msg.className = 'msg'; msg.textContent = 'Escreva seu usuário acima e toque de novo em Esqueci a senha.'; $('lg-usuario').focus(); return; }
+    if (!digitado) { msg.className = 'msg'; msg.textContent = 'Escreva sua matrícula acima e toque de novo em Esqueci a senha.'; $('lg-usuario').focus(); return; }
     try {
-      var email = await emailDoUsuario(usuario);
+      var email = (await contaDoLogin(digitado)).email;
+      // O e-mail feito com a matrícula (104523@empresa) não recebe mensagem:
+      // a senha nova sai pelo escritório, na gestão (Usuários → Nova senha).
+      if (/^\d+@/.test(email)) {
+        msg.className = 'msg info';
+        msg.textContent = 'Peça uma senha nova ao escritório: eles trocam pela gestão e passam para você.';
+        return;
+      }
       var r = await comPrazo(S.sb.auth.resetPasswordForEmail(email, { redirectTo: new URL('../', location.href).href }), 20000);
       if (r.error) throw r.error;
       msg.className = 'msg ok';
       msg.textContent = 'Enviamos um link para ' + emailEscondido(email) + '. Crie a senha nova por ele e volte aqui para entrar.';
     } catch (e) {
       msg.className = 'msg';
-      msg.textContent = /usuario-nao-encontrado/.test(String(e && e.message))
-        ? 'Não achamos esse usuário. Confira como ele está escrito ou fale com o escritório.' : traduzErroLogin(e);
+      msg.textContent = traduzErroLogin(e);
     }
   }
 
@@ -1533,7 +1553,7 @@
     var todos = await DB.todos('rdos');
     var fila = todos.filter(function (r) { return r.status !== 'rascunho' && r.status !== 'enviado'; }).length;
     $('dlg-aj-ficha').innerHTML =
-      '<dt>Usuário</dt><dd>' + esc(usuarioDaConta(S.conta)) + '</dd>' +
+      (S.conta && S.conta.matricula ? '<dt>Matrícula</dt><dd>' + esc(S.conta.matricula) + '</dd>' : '<dt>Conta</dt><dd>' + esc(usuarioDaConta(S.conta)) + '</dd>') +
       '<dt>Equipe</dt><dd>' + esc(S.equipe ? S.equipe.codigo : '') + '</dd>' +
       '<dt>Na fila</dt><dd>' + fila + '</dd>' +
       '<dt>Serviços</dt><dd>' + (CAT.itens.length ? CAT.itens.length + (CAT.origem === 'app' ? ' (lista que vem no app)' : CAT.em ? ' (lista de ' + quandoBR(CAT.em) + ')' : '') : 'lista não baixada') + '</dd>' +
@@ -1926,7 +1946,11 @@
     var salva = await kvGet('conta');
     try {
       var r = await comPrazo(S.sb.auth.getSession(), 6000);
-      if (r.data && r.data.session) { S.conta = montarConta(r.data.session.user); kvSet('conta', S.conta); }
+      if (r.data && r.data.session) {
+        S.conta = montarConta(r.data.session.user);
+        if (!S.conta.matricula && salva && salva.id === S.conta.id && salva.matricula) S.conta.matricula = salva.matricula;   // a que entrou
+        kvSet('conta', S.conta);
+      }
       else if (r.error && salva) { S.conta = salva; }               // sem internet: segue com a conta guardada
       else if (salva) { S.conta = salva; S.precisaLogin = true; }   // acesso venceu: preenche, mas pede login para enviar
     } catch (e) {

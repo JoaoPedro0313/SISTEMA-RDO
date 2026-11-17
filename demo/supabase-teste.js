@@ -617,7 +617,7 @@
     }).observe(selo, { childList: true, characterData: true, subtree: true });
     var dica = function (el, tx) { if (!el) return; var p = document.createElement('p'); p.className = 'rdo-teste-dica'; p.textContent = tx; el.insertBefore(p, el.firstChild); };
     dica(document.getElementById('g-form-login'), 'Modo de teste: entre com joao.araujo (gestor), maria.escritorio (escritório) ou alan (encarregado), com qualquer senha. Contas criadas na aba Usuários usam a senha definida.');
-    dica(document.getElementById('form-login'), 'Modo de teste: entre com alan ou bruno, com qualquer senha. Contas criadas na gestão de teste usam a senha definida lá.');
+    dica(document.getElementById('form-login'), 'Modo de teste: entre com a matrícula 1001 (Alan) ou 1002 (Bruno), com qualquer senha. Contas criadas na gestão de teste usam a senha definida lá.');
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', marcar); else marcar();
 })();

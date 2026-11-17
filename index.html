@@ -9,7 +9,7 @@
 <link rel="icon" href="campo/icons/favicon-32.png" sizes="32x32">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
-<link rel="stylesheet" href="gestao.css?v=5">
+<link rel="stylesheet" href="gestao.css?v=6">
 </head>
 <body>
 <!-- entrar -->
@@ -203,13 +203,13 @@
     <div class="m-cartao">
       <div class="m-cartao-cab"><span class="m-h2"><i class="ti ti-users" aria-hidden="true"></i>Usuários do app e da gestão</span><span class="m-meta" id="ga-usu-resumo"></span></div>
       <div class="ga-barra-usu">
-        <label class="m-procura"><i class="ti ti-search" aria-hidden="true"></i><input type="search" id="ga-usu-busca" placeholder="Procurar por nome, usuário, matrícula ou equipe" aria-label="Procurar usuário"></label>
+        <label class="m-procura"><i class="ti ti-search" aria-hidden="true"></i><input type="search" id="ga-usu-busca" placeholder="Procurar por nome, matrícula, e-mail ou equipe" aria-label="Procurar usuário"></label>
         <label class="ga-check"><input type="checkbox" id="ga-usu-inativos"> Mostrar desativados</label>
         <button type="button" class="m-bt m-bt-pri" id="ga-usu-novo"><i class="ti ti-user-plus" aria-hidden="true"></i>Novo usuário</button>
       </div>
       <p class="m-meta ga-usu-aviso" id="ga-usu-aviso" hidden></p>
       <div class="ga-rola" id="ga-usu-tabela"><table class="m-tabela"><thead><tr><th>Nome</th><th>Matrícula</th><th>Equipe</th><th>Acesso</th><th>Último uso do app</th><th>Situação</th><th><span class="ga-oculto">Ações</span></th></tr></thead><tbody id="ga-usu-corpo"></tbody></table></div>
-      <p class="m-meta ga-rodape">As contas são as mesmas do sistema Mariuá: quem é criado aqui também aparece no Admin de lá, e o contrário também vale. O encarregado entra no app com o usuário (o começo do e-mail, antes do @) e a senha.</p>
+      <p class="m-meta ga-rodape">As contas são as mesmas do sistema Mariuá: quem é criado aqui também aparece no Admin de lá, e o contrário também vale. O encarregado entra no app com a matrícula e a senha.</p>
     </div>
   </section>
 
@@ -275,9 +275,9 @@
         <datalist id="ga-du-func-lista"></datalist>
       </label>
       <label class="ga-campo" data-modo="novo editar">Nome completo<input type="text" id="ga-du-nome" autocomplete="off"></label>
-      <label class="ga-campo" data-modo="novo editar">Matrícula<input type="text" id="ga-du-mat" inputmode="numeric" autocomplete="off"></label>
-      <div class="ga-campo" data-modo="novo">Usuário para entrar no app
-        <div class="ga-du-login"><input type="text" id="ga-du-usuario" autocapitalize="none" spellcheck="false" autocomplete="off" aria-label="Usuário"><span aria-hidden="true">@</span><input type="text" id="ga-du-dominio" autocapitalize="none" spellcheck="false" autocomplete="off" aria-label="Domínio do e-mail da empresa" placeholder="empresa.com.br"></div>
+      <div class="ga-campo" data-modo="novo editar"><label for="ga-du-mat">Matrícula</label><input type="text" id="ga-du-mat" inputmode="numeric" maxlength="20" autocomplete="off" aria-describedby="ga-du-mat-tx"><span class="ga-pequeno" id="ga-du-mat-tx">É com a matrícula e a senha que a pessoa entra no app.</span></div>
+      <div class="ga-campo" data-modo="novo">E-mail da conta
+        <div class="ga-du-login"><input type="text" id="ga-du-usuario" readonly tabindex="-1" placeholder="matrícula" aria-label="Começo do e-mail, feito com a matrícula"><span aria-hidden="true">@</span><input type="text" id="ga-du-dominio" autocapitalize="none" spellcheck="false" autocomplete="off" aria-label="Domínio do e-mail da empresa" placeholder="empresa.com.br"></div>
         <span class="ga-pequeno" id="ga-du-email-tx"></span>
       </div>
       <label class="ga-campo" data-modo="novo senha">Senha<span class="ga-du-senha"><input type="text" id="ga-du-senha" autocomplete="new-password" spellcheck="false"><button type="button" class="m-bt" id="ga-du-gerar">Gerar outra</button></span></label>
@@ -344,7 +344,7 @@
 <div class="m-toast" id="ga-toast" role="status" aria-live="polite"></div>
 
 <script src="campo/vendor/supabase-2.118.0.js"></script>
-<script src="rdo-app.js?v=5"></script>
-<script src="gestao-app.js?v=8"></script>
+<script src="rdo-app.js?v=6"></script>
+<script src="gestao-app.js?v=9"></script>
 </body>
 </html>

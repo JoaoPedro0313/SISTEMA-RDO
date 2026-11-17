@@ -605,7 +605,7 @@
       '<div class="rdoapp-corpo"><div class="rdoapp-qr"><div id="rdoapp-qrcode" aria-label="QR code com o link do app"></div><ol>' +
       '<li>Aponte a câmera do celular para o código ou abra o link abaixo.</li>' +
       '<li>Na página, toque em Baixar para Android e instale o app. No iPhone, a página mostra como usar o app pelo Safari.</li>' +
-      '<li>Entre com o usuário (o começo do e-mail, antes do @) e a senha do sistema. Cada encarregado precisa de uma conta, criada no Admin do sistema Mariuá.</li>' +
+      '<li>Entre com a matrícula e a senha. Cada encarregado precisa de uma conta, criada na aba Usuários da gestão.</li>' +
       '</ol></div><div class="rdoapp-link"><input id="rdoapp-url" readonly value="' + esc(url) + '" aria-label="Link da página de download do app">' +
       '<button type="button" class="rdoapp-bt forte" id="rdoapp-copiar">Copiar link</button></div></div>', 'Instalar o app no celular');
     $('rdoapp-copiar').addEventListener('click', function () {

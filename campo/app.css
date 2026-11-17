@@ -110,6 +110,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke
 .sub-p{color:var(--tinta-2);font-size:.95rem;margin:4px 0 8px}
 .msg{min-height:1.4em;margin:8px 0 0;font-weight:600;font-size:.95rem;color:var(--erro)}
 .msg.ok{color:var(--ok)}
+.msg.info{color:var(--tinta)}
 .msg:empty{min-height:0;margin:0}
 
 /* ───────── campos ───────── */

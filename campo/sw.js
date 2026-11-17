@@ -5,10 +5,9 @@
    Os celulares percebem a mudança ao abrir o app, ao voltar para ele e a cada
    15 minutos com ele aberto, e mostram "Nova versão do app" com o botão
    Atualizar agora. As NOVIDADES aparecem nesse aviso (até 3 linhas curtas). */
-var VERSAO = '1.2.8';
+var VERSAO = '1.2.9';
 var NOVIDADES = [
-  'Lista de serviços dentro do app: o apontamento funciona mesmo sem internet',
-  'Botão Sincronizar na tela inicial: obras novas e lista de serviços chegam na hora'
+  'Para entrar no app, agora você usa a sua matrícula no lugar do usuário'
 ];
 
 var CACHE = 'rdo-campo-' + VERSAO;

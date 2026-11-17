@@ -256,6 +256,8 @@ button.ga-pg-ver:hover{text-decoration:underline;text-underline-offset:2px}
 .ga-dp-linha>.ga-dp-largo{flex:2 1 220px}
 .ga-du-login{display:flex;align-items:center;gap:6px}
 .ga-du-login span{font-weight:700;color:var(--tinta-3)}
+.ga-du-login input[type=text][readonly]{background:var(--sup-2);color:var(--tinta-2);cursor:default}   /* a matrícula, repetida no e-mail */
+.ga-pequeno.ga-du-alerta{color:var(--atencao);font-weight:600}
 .ga-du-senha{display:flex;gap:8px}
 .ga-du-senha input{font-size:1.05rem!important;letter-spacing:1px}
 .ga-du-msg{margin:0;font-size:.88rem;font-weight:600;color:var(--erro)}
