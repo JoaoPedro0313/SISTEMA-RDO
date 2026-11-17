@@ -13,7 +13,7 @@
 (function () {
   'use strict';
 
-  var VERSAO_APP = '1.2.6';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
+  var VERSAO_APP = '1.2.7';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
   var MOTIVOS_PADRAO = ['Chuva', 'Falta de material', 'Desligamento não liberado', 'Interferência de terceiros',
     'Veículo ou equipamento', 'Acidente ou incidente', 'Outro'];
   var CLIMA = { bom: 'Bom', nublado: 'Nublado', chuva: 'Chuva', impraticavel: 'Impraticável' };

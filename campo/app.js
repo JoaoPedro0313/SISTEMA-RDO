@@ -19,7 +19,7 @@
     SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxeGVqZm9pYmViY2J0c3F5bWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NjUzMTEsImV4cCI6MjA4NzQ0MTMxMX0.lwf7_EJ6UchEOpzhW3cVKztxDGy78gaQblRvgiEwWh8',
     TABELA: 'rdo_campo',
     BUCKET: 'rdo-fotos',
-    VERSAO: '1.2.6',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
+    VERSAO: '1.2.7',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
     FOTO_LADO: 1600,        // maior lado da foto enviada (px)
     FOTO_QUALIDADE: 0.72,   // JPEG: ~250–450 KB por foto
     MINI_LADO: 320,         // miniatura guardada no celular
@@ -799,25 +799,34 @@
       : S.online ? 'Sincronizada às ' + hora + '.' : 'Sem internet. Mostrando a programação sincronizada às ' + hora + '.';
   }
 
-  // Botão Sincronizar: busca a programação agora e diz o que chegou.
-  // Aproveita o sinal para mandar os RDOs da fila.
+  // Botão Sincronizar: busca agora a programação e a lista de serviços, e diz
+  // o que chegou. Aproveita o sinal para mandar os RDOs da fila.
   async function sincronizarProgramacao() {
     var bt = $('ini-sinc');
     if (!bt || bt.getAttribute('aria-busy') === 'true' || !S.equipe) return;
     if (!S.online || !navigator.onLine) { aviso('Sem internet agora. Toque em Sincronizar quando o celular pegar sinal.'); return; }
     var antes = ((S.ctxHoje && S.ctxHoje.programacao) || []).map(function (p) { return String(p.id); });
+    var servAntes = CAT.itens.length;
     bt.setAttribute('aria-busy', 'true'); bt.disabled = true; $('ini-sinc-tx').textContent = 'Sincronizando…';
     try {
       var d = await buscarContexto(hojeISO());
+      var servOk = true;
+      try { await carregarCatalogo(true); } catch (x) { servOk = false; }
       var ids = d.programacao.map(function (p) { return String(p.id); });
       var novas = ids.filter(function (id) { return antes.indexOf(id) < 0; });
       var sairam = antes.filter(function (id) { return ids.indexOf(id) < 0; });
       S.progNovas = { ids: novas, ate: Date.now() + 10 * 60 * 1000 };
-      if (novas.length) aviso(novas.length === 1 ? 'Chegou 1 obra nova na programação.' : 'Chegaram ' + novas.length + ' obras novas na programação.', 'ok');
-      else if (sairam.length) aviso('Programação atualizada: ' + (sairam.length === 1 ? '1 obra saiu.' : sairam.length + ' obras saíram.'));
-      else aviso('Programação em dia. Nenhuma obra nova.');
+      var tx = novas.length ? (novas.length === 1 ? 'Chegou 1 obra nova na programação.' : 'Chegaram ' + novas.length + ' obras novas na programação.')
+        : sairam.length ? 'Programação atualizada: ' + (sairam.length === 1 ? '1 obra saiu.' : sairam.length + ' obras saíram.')
+        : 'Programação em dia. Nenhuma obra nova.';
+      var n = CAT.itens.length;
+      if (!servOk) tx += ' A lista de serviços não baixou agora; tente de novo.';
+      else if (!n) tx += ' A lista de serviços ainda está vazia no sistema: peça ao escritório para importar a precificação.';
+      else if (n !== servAntes) tx += ' Lista de serviços atualizada: ' + n + ' serviços.';
+      aviso(tx, novas.length || (servOk && n && n !== servAntes) ? 'ok' : (servOk && !n ? 'erro' : ''), 6000);
       sincronizar();
-      atualizarDoEscritorio(false);
+      carregarConfig().catch(function () {});
+      informarAparelho(true);
     } catch (e) {
       aviso(tipoErro(e) === 'rede' ? 'O sinal caiu. Tente de novo quando a internet melhorar.'
         : mensagemErro(e, 'Não deu para sincronizar a programação.'), 'erro', 6000);

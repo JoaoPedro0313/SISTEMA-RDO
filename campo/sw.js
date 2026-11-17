@@ -5,9 +5,9 @@
    Os celulares percebem a mudança ao abrir o app, ao voltar para ele e a cada
    15 minutos com ele aberto, e mostram "Nova versão do app" com o botão
    Atualizar agora. As NOVIDADES aparecem nesse aviso (até 3 linhas curtas). */
-var VERSAO = '1.2.6';
+var VERSAO = '1.2.7';
 var NOVIDADES = [
-  'Botão Sincronizar na tela inicial: as obras que o escritório programar aparecem na hora'
+  'Botão Sincronizar na tela inicial: obras novas e lista de serviços chegam na hora'
 ];
 
 var CACHE = 'rdo-campo-' + VERSAO;
