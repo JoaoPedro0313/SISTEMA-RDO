@@ -187,18 +187,29 @@ grant select on public.servicos_catalogo to authenticated;
 revoke all on public.servicos_catalogo from anon;
 -- gravar só pela função abaixo
 
--- O que o app baixa: só os serviços em vigor, com nomes curtos para pesar pouco.
+-- O que o app baixa: os serviços em uso, com nomes curtos para pesar pouco.
+-- A vigência do arquivo vale por contrato: se o contrato tem serviços em
+-- vigência hoje, vão só esses; se a vigência da lista inteira já terminou (ou
+-- ainda não começou), vai a lista toda, até o escritório importar a nova.
+-- Assim o celular não fica sem lista só por causa da data do arquivo.
 create or replace function public.rdo_campo_servicos()
 returns jsonb
 language sql stable security definer set search_path = public as $$
+  with ativos as (
+    select s.*, (s.vigencia_ini is null or s.vigencia_ini <= current_date)
+            and (s.vigencia_fim is null or s.vigencia_fim >= current_date) as vigente
+    from servicos_catalogo s
+    where s.ativo
+  ), por_contrato as (
+    select contrato, bool_or(vigente) as tem_vigente from ativos group by contrato
+  )
   select coalesce(jsonb_agg(jsonb_build_object(
-           'c', codigo, 'd', descricao, 'u', coalesce(unidade, ''), 'k', casas_decimais,
-           'g', coalesce(grupo, ''), 'ct', contrato)
-         order by contrato, grupo, codigo), '[]'::jsonb)
-  from servicos_catalogo
-  where ativo
-    and (vigencia_ini is null or vigencia_ini <= current_date)
-    and (vigencia_fim is null or vigencia_fim >= current_date)
+           'c', a.codigo, 'd', a.descricao, 'u', coalesce(a.unidade, ''), 'k', a.casas_decimais,
+           'g', coalesce(a.grupo, ''), 'ct', a.contrato)
+         order by a.contrato, a.grupo, a.codigo), '[]'::jsonb)
+  from ativos a
+  join por_contrato p on p.contrato = a.contrato
+  where a.vigente or not p.tem_vigente
 $$;
 
 -- Importação do CSV (feita pelo site). Só gestor. Substitui a lista dos
@@ -1037,14 +1048,20 @@ grant execute on function public.rdo_campo_prog_copiar(date, date, boolean) to a
 notify pgrst, 'reload schema';
 
 -- Os números de equipes e RDOs ajudam a ver se este é o projeto certo do
--- Supabase (o mesmo que o site usa): num projeto vazio, aparecem zeros.
+-- Supabase (o mesmo que o site usa): num projeto vazio, aparecem zeros. O de
+-- serviços é o que o celular recebe para o apontamento.
 select case
          when to_regclass('public.rdo_campo_programacao') is not null
           and to_regprocedure('public.rdo_campo_prog_dia(date)') is not null
           and to_regprocedure('public.rdo_campo_prog_salvar(jsonb)') is not null
           and to_regprocedure('public.rdo_campo_contexto(date, text)') is not null
          then 'Tudo certo: banco do Sistema RDO atualizado, com a programação de obras. Este banco tem '
-              || jsonb_array_length(public.rdo_campo_equipes()) || ' equipes no Cadastro de Equipes e '
-              || (select count(*) from public.rdo_campo) || ' RDOs do app. Volte à gestão e toque em Atualizar.'
+              || jsonb_array_length(public.rdo_campo_equipes()) || ' equipes no Cadastro de Equipes, '
+              || (select count(*) from public.rdo_campo) || ' RDOs do app e '
+              || jsonb_array_length(public.rdo_campo_servicos()) || ' serviços na lista do app.'
+              || case when jsonb_array_length(public.rdo_campo_servicos()) = 0
+                      then ' A lista de serviços está vazia: importe a precificação na gestão, em Configurações → Lista de serviços.'
+                      else '' end
+              || ' Volte à gestão e toque em Atualizar.'
          else 'Faltou alguma parte. Rode o arquivo inteiro de novo e veja se aparece algum erro em vermelho.'
        end as resultado;
