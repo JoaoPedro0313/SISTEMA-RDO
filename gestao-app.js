@@ -1,10 +1,11 @@
 /* ============================================================================
    gestao-app.js — Sistema RDO (index.html), separado do site turno-hoje
    ----------------------------------------------------------------------------
-   Gestão do app dos encarregados: RDOs recebidos, produção por serviço,
-   equipes, celulares e configurações do app. Lê o que o rdo_campo.sql criou:
-   rdo_campo, rdo_campo_aparelhos, rdo_campo_config, servicos_catalogo e as
-   funções rdo_campo_equipes, rdo_campo_programados e rdo_campo_salvar_config.
+   Gestão do app dos encarregados: programação das obras, RDOs recebidos,
+   produção por serviço, equipes, celulares e configurações do app. Lê o que
+   o rdo_campo.sql criou: rdo_campo, rdo_campo_aparelhos, rdo_campo_config,
+   servicos_catalogo e as funções rdo_campo_equipes, rdo_campo_programados,
+   rdo_campo_salvar_config e rdo_programacao_* (programação feita aqui).
    O RDO aberto, a lista de serviços e o QR code vêm do rdo-app.js (RDOAPP).
    Login próprio (usuário e senha, as mesmas contas do sistema Mariuá) e
    acesso pela função rdo_campo_meu_acesso: gestor ou liberado por um gestor.
@@ -12,7 +13,7 @@
 (function () {
   'use strict';
 
-  var VERSAO_APP = '1.2.5';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
+  var VERSAO_APP = '1.2.6';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
   var MOTIVOS_PADRAO = ['Chuva', 'Falta de material', 'Desligamento não liberado', 'Interferência de terceiros',
     'Veículo ou equipamento', 'Acidente ou incidente', 'Outro'];
   var CLIMA = { bom: 'Bom', nublado: 'Nublado', chuva: 'Chuva', impraticavel: 'Impraticável' };
@@ -181,10 +182,12 @@
     selo_banco(falhou ? 'offline' : 'online', falhou ? 'Banco com erro' : 'Banco conectado');
     $('ga-carregado').textContent = 'Atualizado às ' + p2(new Date().getHours()) + ':' + p2(new Date().getMinutes());
     renderTudo();
+    if (G.aba === 'programacao') carregarProgramacao();
   }
 
   function renderTudo() {
     renderGeral(); renderRdos(); renderProducao(); renderEquipes(); renderCelulares(); renderConfig(); carregarAcessos();
+    if (PG.carregado) renderProgramacao();
     if (G.aba === 'usuarios') carregarUsuarios(true); else if (U.carregado) renderUsuarios();
   }
 
@@ -271,7 +274,11 @@
     var sem = semRdoHoje();
     $('ga-sem-n').textContent = sem.length;
     $('ga-sem-n').className = 'm-selo' + (sem.length ? ' aviso' : ' ga-ok');
-    if (!G.prog.length) { box.innerHTML = vazio('Ninguém programado para hoje na Programação Diária.', 'calendar'); return; }
+    if (!G.prog.length) {
+      box.innerHTML = vazio('Ninguém programado para hoje.', 'calendar') +
+        '<div class="ga-pg-chamada"><button type="button" class="m-bt m-bt-peq" data-ir-prog="1"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Programar as obras de hoje</button></div>';
+      return;
+    }
     if (!sem.length) { box.innerHTML = vazio('Todas as equipes programadas hoje já mandaram RDO pelo app.'); return; }
     box.innerHTML = '<ul class="ga-lista">' + sem.map(function (p) {
       var cel = G.aparelhos.filter(function (a) { return p.codigo && nc(a.equipe_codigo) === nc(p.codigo); })[0];
@@ -764,6 +771,320 @@
     });
   }
 
+  // ─── programação de obras (feita aqui, sem depender do sistema Mariuá) ──
+  // Gestor e escritório programam as obras de cada equipe por dia. O app do
+  // encarregado recebe essa programação junto com a Programação Diária do
+  // sistema Mariuá, que aparece aqui também, só para leitura.
+  var PG = { dia: '', itens: [], rdos: [], erro: null, carregado: false, seq: 0, editando: null,
+             obras: {}, ativs: {}, muns: {} };
+
+  function diaLongo(s) {
+    var t;
+    try { t = dataDe(s).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) { t = br(s); }
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  function qtdTx(v) {
+    if (v == null || v === '') return '';
+    return typeof v === 'number' ? num(v) : String(v);
+  }
+  function obraTx(p) { return [p.pep, p.nome_obra].filter(Boolean).join(', ') || 'Obra sem nome'; }
+  function casaNome(a, b) { a = norm(a); b = norm(b); return !!a && !!b && (a === b || a.indexOf(b) === 0 || b.indexOf(a) === 0); }
+  function erroProg(e) {
+    var m = String((e && (e.message || e.error)) || e || '');
+    if (/rdo_programacao|could not find|schema cache/i.test(m)) return 'O banco ainda não tem a programação do Sistema RDO. Rode o rdo_campo.sql atualizado no Supabase (SQL Editor → Run).';
+    if (/fetch|network|load failed/i.test(m)) return 'Sem conexão com o banco. Tente de novo quando a internet voltar.';
+    return m;
+  }
+  // Obras, atividades e municípios já usados, para sugerir no formulário.
+  function lembrarObras(itens) {
+    lista(itens).forEach(function (x) {
+      if (x.pep && !PG.obras[nc(x.pep)]) PG.obras[nc(x.pep)] = { pep: x.pep, nome_obra: x.nome_obra || '', municipio: x.municipio || '' };
+      if (x.atividade) PG.ativs[norm(x.atividade)] = x.atividade;
+      if (x.municipio) PG.muns[norm(x.municipio)] = x.municipio;
+    });
+  }
+
+  async function carregarProgramacao() {
+    if (!G.papel) return;
+    if (!PG.dia) PG.dia = hojeISO();
+    var minha = ++PG.seq, dia = PG.dia;
+    renderProgCab();
+    if (!PG.carregado || PG.itens.length && PG.itens[0].data !== dia) {
+      $('ga-pg-corpo').innerHTML = '<tr><td colspan="6">' + vazio('Carregando a programação de ' + br(dia) + '…', 'loader-2') + '</td></tr>';
+    }
+    var pedidos = [
+      G.sb.rpc('rdo_programacao_dia', { p_data: dia }),
+      G.sb.from('rdo_campo').select('*').eq('data', dia).order('recebido_em', { ascending: false }).range(0, 1999)
+    ];
+    var res = await Promise.all(pedidos.map(function (p) { return Promise.resolve(p).then(function (r) { return r; }, function (e) { return { error: e }; }); }));
+    if (minha !== PG.seq) return;                       // trocou de dia no meio: vale a busca mais nova
+    PG.carregado = true;
+    PG.erro = res[0].error || null;
+    PG.itens = PG.erro ? [] : lista(res[0].data);
+    PG.rdos = res[1].error ? [] : lista(res[1].data);
+    lembrarObras(PG.itens); lembrarObras(PG.rdos);
+    renderProgramacao();
+  }
+
+  // O RDO que veio dessa obra: pelo id da programação ou, se não, pela equipe e pela obra.
+  function rdoDaProg(p) {
+    var porId = PG.rdos.filter(function (r) { return r.prog_id && String(r.prog_id) === String(p.id); })[0];
+    if (porId) return porId;
+    var k = nc(p.equipe_codigo), pep = nc(p.pep), nome = norm(p.nome_obra);
+    return PG.rdos.filter(function (r) {
+      var mesma = k ? nc(r.equipe_codigo) === k : casaNome(r.encarregado, p.encarregado);
+      if (!mesma) return false;
+      return pep ? nc(r.pep) === pep : !!nome && norm(r.nome_obra) === nome;
+    })[0] || null;
+  }
+
+  function progVisivel() {
+    return PG.itens.filter(function (p) { return daEquipe(p.equipe_codigo, p.encarregado); }).sort(function (a, b) {
+      return (!a.equipe_codigo - !b.equipe_codigo) ||                 // sem equipe no cadastro: no fim
+        String(a.equipe_codigo || norm(a.encarregado)).localeCompare(String(b.equipe_codigo || norm(b.encarregado))) ||
+        String(a.origem).localeCompare(String(b.origem)) || String(a.pep || a.nome_obra).localeCompare(String(b.pep || b.nome_obra));
+    });
+  }
+
+  function renderProgCab() {
+    if (!PG.dia) PG.dia = hojeISO();
+    var hoje = hojeISO();
+    $('ga-pg-data').value = PG.dia;
+    $('ga-pg-nome').textContent = diaLongo(PG.dia);
+    document.querySelectorAll('#ga-pg-atalhos [data-d]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(somaDias(hoje, +b.dataset.d) === PG.dia));
+    });
+  }
+
+  function renderProgramacao() {
+    renderProgCab();
+    var corpo = $('ga-pg-corpo'), resumo = $('ga-pg-resumo');
+    if (PG.erro) {
+      corpo.innerHTML = '<tr><td colspan="6">' + caixaErro(erroProg(PG.erro)) + '</td></tr>';
+      resumo.textContent = ''; $('ga-pg-livres').innerHTML = ''; $('ga-pg-livres-n').textContent = '—';
+      return;
+    }
+    var hoje = hojeISO(), futuro = PG.dia > hoje, itens = progVisivel();
+    var comRdo = 0, doMariua = 0, equipes = {};
+    corpo.innerHTML = itens.length ? itens.map(function (p) {
+      var rdo = futuro ? null : rdoDaProg(p), mariua = p.origem === 'mariua';
+      if (rdo) comRdo++;
+      if (mariua) doMariua++;
+      equipes[p.equipe_codigo ? nc(p.equipe_codigo) : 'E:' + norm(p.encarregado)] = 1;
+      var sit = futuro ? selo('Programada')
+        : rdo ? '<button type="button" class="m-selo ga-ok ga-pg-ver" data-pg-rdo="' + esc(rdo.id) + '" title="Abrir o RDO, com as fotos">RDO enviado</button>'
+        : selo('Sem RDO', PG.dia === hoje ? 'aviso' : 'atencao');
+      var acoes = mariua
+        ? '<span title="Vem da Programação Diária do sistema Mariuá. Para mudar, use o sistema Mariuá.">' + selo('Sistema Mariuá') + '</span>'
+        : '<div class="ga-usu-acoes"><button type="button" class="m-bt m-bt-peq" data-pg-acao="editar">Mudar</button>' +
+          '<button type="button" class="m-bt m-bt-peq" data-pg-acao="tirar">Tirar</button></div>';
+      var quem = mariua ? '' : 'Programada por ' + String(p.atualizado_por || p.criado_por || '').split('@')[0] + ' em ' + quando(p.atualizado_em || p.criado_em);
+      return '<tr data-pg="' + esc(p.id) + '"' + (quem ? ' title="' + esc(quem) + '"' : '') + '>' +
+        '<td>' + (p.equipe_codigo ? '<span class="m-cod">' + esc(p.equipe_codigo) + '</span>' : '<span class="m-sub">sem equipe no cadastro</span>') +
+          '<div class="m-sub">' + esc(p.encarregado || '') + '</div></td>' +
+        '<td><span class="m-tit">' + esc(obraTx(p)) + '</span><div class="m-sub">' + esc(p.municipio || '') + '</div></td>' +
+        '<td>' + esc(p.atividade || '') + (p.turno ? '<div class="m-sub">' + esc(p.turno) + '</div>' : '') + '</td>' +
+        '<td class="m-num ga-nw">' + (qtdTx(p.qtd_previsto) ? esc(qtdTx(p.qtd_previsto)) : '<span class="m-sub">—</span>') + '</td>' +
+        '<td>' + sit + '</td><td>' + acoes + '</td></tr>';
+    }).join('') : '<tr><td colspan="6">' + vazio(PG.itens.length ? 'Nada programado para esta equipe em ' + br(PG.dia) + '.'
+      : 'Nada programado para ' + br(PG.dia) + '. Use Programar obra, ou copie de outro dia.', 'calendar-off') + '</td></tr>';
+
+    var n = itens.length, ne = Object.keys(equipes).length;
+    resumo.textContent = !n ? '' : n + (n === 1 ? ' obra programada' : ' obras programadas') + ' para ' + ne + (ne === 1 ? ' equipe' : ' equipes') + ' em ' + br(PG.dia) + '.' +
+      (futuro ? '' : ' ' + comRdo + ' com RDO enviado pelo app.') +
+      (doMariua ? ' ' + doMariua + (doMariua === 1 ? ' vem' : ' vêm') + ' da Programação Diária do sistema Mariuá e só ' + (doMariua === 1 ? 'muda' : 'mudam') + ' lá.' : '') +
+      ' O encarregado vê a programação na tela inicial do app e, para ver uma obra nova na hora, toca em Sincronizar.';
+    renderProgLivres();
+  }
+
+  // Equipes do cadastro sem nenhuma obra no dia, para programar com um clique.
+  function renderProgLivres() {
+    var box = $('ga-pg-livres');
+    if (!G.equipes.length) {
+      box.innerHTML = G.erros.equipes ? caixaErro(erroBanco(G.erros.equipes, 'o Cadastro de Equipes')) : vazio('Carregando as equipes…', 'loader-2');
+      $('ga-pg-livres-n').textContent = '—';
+      return;
+    }
+    var livres = G.equipes.filter(function (q) {
+      if (!q.codigo || !daEquipe(q.codigo, q.encarregado)) return false;
+      return !PG.itens.some(function (p) { return p.equipe_codigo ? nc(p.equipe_codigo) === nc(q.codigo) : casaNome(p.encarregado, q.encarregado); });
+    });
+    $('ga-pg-livres-n').textContent = livres.length;
+    $('ga-pg-livres-n').className = 'm-selo' + (livres.length ? ' atencao' : ' ga-ok');
+    box.innerHTML = livres.length ? '<div class="ga-pg-livres">' + livres.map(function (q) {
+      return '<button type="button" class="m-bt m-bt-peq" data-pg-eq="' + esc(q.codigo) + '" title="Programar obra para ' + esc(q.encarregado || q.codigo) + '">' +
+        '<i class="ti ti-plus" aria-hidden="true"></i>' + esc(q.codigo) + '</button>';
+    }).join('') + '</div>' : vazio('Todas as equipes têm obra programada em ' + br(PG.dia) + '.');
+  }
+
+  function irParaDia(d) { PG.dia = d || hojeISO(); carregarProgramacao(); }
+
+  // Formulário de programar e mudar
+  function opcoes(el, valores) {
+    el.innerHTML = valores.slice(0, 300).map(function (v) {
+      return typeof v === 'string' ? '<option value="' + esc(v) + '">' : '<option value="' + esc(v.v) + '" label="' + esc(v.l) + '">';
+    }).join('');
+  }
+  function abrirDialogoProg(item, codigo) {
+    PG.editando = item || null;
+    lembrarObras(G.rdos);
+    var sel = $('ga-dp-equipe'), eqs = G.equipes.filter(function (q) { return q.codigo; }).slice().sort(function (a, b) { return a.codigo.localeCompare(b.codigo); });
+    var atual = item ? item.equipe_codigo : (codigo || '');
+    if (atual && !eqs.some(function (q) { return q.codigo === atual; })) eqs.unshift({ codigo: atual, encarregado: item ? item.encarregado : '' });
+    sel.innerHTML = '<option value="">Escolha a equipe</option>' + eqs.map(function (q) {
+      return '<option value="' + esc(q.codigo) + '">' + esc(q.codigo + (q.encarregado ? ' (' + q.encarregado + ')' : '')) + '</option>';
+    }).join('');
+    sel.value = atual;
+    $('ga-dp-tit').textContent = item ? 'Mudar obra programada' : 'Programar obra';
+    $('ga-dp-sub').textContent = G.equipes.length ? 'O encarregado vê a obra na tela inicial do app, no dia programado.'
+      : 'O Cadastro de Equipes não carregou. Toque em Atualizar antes de programar.';
+    $('ga-dp-data').value = item ? item.data : PG.dia;
+    $('ga-dp-pep').value = item ? item.pep || '' : '';
+    $('ga-dp-nome').value = item ? item.nome_obra || '' : '';
+    $('ga-dp-mun').value = item ? item.municipio || '' : '';
+    $('ga-dp-ativ').value = item ? item.atividade || '' : '';
+    $('ga-dp-qtd').value = item ? qtdTx(item.qtd_previsto) : '';
+    $('ga-dp-msg').textContent = '';
+    $('ga-dp-outra').hidden = !!item;
+    $('ga-dp-salvar').textContent = item ? 'Salvar' : 'Programar';
+    opcoes($('ga-dp-peps'), Object.keys(PG.obras).map(function (k) { var o = PG.obras[k]; return { v: o.pep, l: [o.nome_obra, o.municipio].filter(Boolean).join(', ') }; }));
+    opcoes($('ga-dp-ativs'), Object.keys(PG.ativs).map(function (k) { return PG.ativs[k]; }).sort());
+    opcoes($('ga-dp-muns'), Object.keys(PG.muns).map(function (k) { return PG.muns[k]; }).sort());
+    $('ga-dlg-prog').showModal();
+    setTimeout(function () { (sel.value ? $('ga-dp-pep') : sel).focus(); }, 50);
+  }
+  // PEP conhecido: completa nome e município, se ainda estiverem em branco.
+  function completarObra() {
+    var o = PG.obras[nc($('ga-dp-pep').value)]; if (!o) return;
+    if (!$('ga-dp-nome').value.trim() && o.nome_obra) $('ga-dp-nome').value = o.nome_obra;
+    if (!$('ga-dp-mun').value.trim() && o.municipio) $('ga-dp-mun').value = o.municipio;
+  }
+  async function salvarProg(ev, outra) {
+    if (ev) ev.preventDefault();
+    var msg = $('ga-dp-msg'), bt = outra ? $('ga-dp-outra') : $('ga-dp-salvar');
+    msg.textContent = '';
+    var antes = PG.editando;
+    var item = {
+      id: antes ? antes.id : null, data: $('ga-dp-data').value, equipe_codigo: $('ga-dp-equipe').value,
+      pep: $('ga-dp-pep').value.trim(), nome_obra: $('ga-dp-nome').value.trim(), municipio: $('ga-dp-mun').value.trim(),
+      atividade: $('ga-dp-ativ').value.trim(), qtd_previsto: $('ga-dp-qtd').value.trim()
+    };
+    if (!item.data) { msg.textContent = 'Escolha o dia.'; $('ga-dp-data').focus(); return; }
+    if (!item.equipe_codigo) { msg.textContent = 'Escolha a equipe.'; $('ga-dp-equipe').focus(); return; }
+    if (!item.pep && !item.nome_obra) { msg.textContent = 'Escreva o PEP ou o nome da obra.'; $('ga-dp-pep').focus(); return; }
+    if (item.qtd_previsto && !/^\d+([.,]\d+)?$/.test(item.qtd_previsto)) { msg.textContent = 'Quantidade prevista: só números, como 6 ou 320,5. Ou deixe em branco.'; $('ga-dp-qtd').focus(); return; }
+    var rotulo = bt.textContent;
+    $('ga-dp-salvar').disabled = true; $('ga-dp-outra').disabled = true; bt.textContent = 'Salvando…';
+    try {
+      var r = await G.sb.rpc('rdo_programacao_salvar', { p_item: item });
+      if (r.error) throw r.error;
+      lembrarObras([item]);
+      var outroDia = item.data !== PG.dia;
+      toast((antes ? 'Programação de ' : 'Obra programada para ') + item.equipe_codigo + ' em ' + br(item.data) + (antes ? ' salva.' : '.') +
+        (outroDia ? ' Ela aparece quando você abrir esse dia.' : ''));
+      if (outra) {
+        PG.editando = null;
+        ['ga-dp-pep', 'ga-dp-nome', 'ga-dp-mun', 'ga-dp-ativ', 'ga-dp-qtd'].forEach(function (id) { $(id).value = ''; });
+        $('ga-dp-equipe').value = '';
+        opcoes($('ga-dp-peps'), Object.keys(PG.obras).map(function (k) { var o = PG.obras[k]; return { v: o.pep, l: [o.nome_obra, o.municipio].filter(Boolean).join(', ') }; }));
+        $('ga-dp-equipe').focus();
+      } else $('ga-dlg-prog').close();
+      carregarProgramacao();
+      if (item.data === hojeISO() || (antes && antes.data === hojeISO())) atualizarProgHoje();
+    } catch (e) {
+      msg.textContent = erroProg(e);
+    } finally {
+      $('ga-dp-salvar').disabled = false; $('ga-dp-outra').disabled = false; bt.textContent = rotulo;
+    }
+  }
+  async function tirarProg(p) {
+    var rdo = rdoDaProg(p);
+    if (!confirm('Tirar ' + obraTx(p) + ' da programação de ' + p.equipe_codigo + ' em ' + br(p.data) + '?' +
+      (rdo ? ' O RDO que já chegou dessa obra continua guardado.' : ' Se o encarregado já abriu o app, a obra some da tela dele na próxima atualização.'))) return;
+    var r = await G.sb.rpc('rdo_programacao_excluir', { p_id: p.id });
+    if (r.error) { toast(erroProg(r.error)); return; }
+    toast('Obra tirada da programação de ' + p.equipe_codigo + '.');
+    carregarProgramacao();
+    if (p.data === hojeISO()) atualizarProgHoje();
+  }
+  // "Programadas hoje sem RDO" (Visão geral e Equipes) sem recarregar tudo.
+  async function atualizarProgHoje() {
+    var r = await G.sb.rpc('rdo_campo_programados', { p_data: hojeISO() });
+    if (r.error) return;
+    G.prog = lista(r.data); delete G.erros.prog;
+    renderGeral(); renderEquipes();
+  }
+
+  // Copiar de um dia para outro
+  function abrirCopia() {
+    var de = somaDias(PG.dia, -1);
+    if (dataDe(de).getDay() === 0) de = somaDias(de, -1);         // segunda-feira: copia do sábado
+    $('ga-dc-de').value = de; $('ga-dc-para').value = PG.dia;
+    $('ga-dc-mariua').checked = false; $('ga-dc-msg').textContent = '';
+    $('ga-dlg-copia').showModal();
+    setTimeout(function () { $('ga-dc-de').focus(); }, 50);
+  }
+  async function copiarProg(ev) {
+    ev.preventDefault();
+    var de = $('ga-dc-de').value, para = $('ga-dc-para').value, msg = $('ga-dc-msg'), bt = $('ga-dc-copiar');
+    msg.textContent = '';
+    if (!de || !para) { msg.textContent = 'Escolha os dois dias.'; return; }
+    if (de === para) { msg.textContent = 'Escolha dois dias diferentes.'; return; }
+    bt.disabled = true; bt.textContent = 'Copiando…';
+    try {
+      var r = await G.sb.rpc('rdo_programacao_copiar', { p_de: de, p_para: para, p_com_mariua: $('ga-dc-mariua').checked });
+      if (r.error) throw r.error;
+      var d = r.data || {}, c = +d.copiadas || 0, rep = +d.repetidas || 0, sem = +d.sem_equipe || 0;
+      if (!c && !rep && !sem) { msg.textContent = 'Não há obras programadas em ' + br(de) + ' para copiar.' + ($('ga-dc-mariua').checked ? '' : ' Se elas vêm do sistema Mariuá, marque a opção acima.'); return; }
+      toast((c ? c + (c === 1 ? ' obra copiada' : ' obras copiadas') + ' para ' + br(para) + '.' : 'Nada novo para copiar.') +
+        (rep ? ' ' + rep + (rep === 1 ? ' já estava programada.' : ' já estavam programadas.') : '') +
+        (sem ? ' ' + sem + (sem === 1 ? ' obra do sistema Mariuá ficou de fora: o encarregado não está' : ' obras do sistema Mariuá ficaram de fora: o encarregado não está') + ' no Cadastro de Equipes.' : ''));
+      $('ga-dlg-copia').close();
+      irParaDia(para);
+      if (para === hojeISO()) atualizarProgHoje();
+    } catch (e) {
+      msg.textContent = erroProg(e);
+    } finally { bt.disabled = false; bt.textContent = 'Copiar'; }
+  }
+
+  function csvProg() {
+    var itens = progVisivel(), futuro = PG.dia > hojeISO();
+    if (!itens.length) { toast('Nada programado em ' + br(PG.dia) + '.'); return; }
+    baixarCsv('programacao_' + PG.dia + (G.equipe ? '_' + G.equipe : '') + '.csv',
+      [['Data', 'Equipe', 'Encarregado', 'PEP', 'Obra', 'Município', 'Atividade', 'Previsto', 'Origem', 'RDO']].concat(itens.map(function (p) {
+        return [br(PG.dia), p.equipe_codigo, p.encarregado, p.pep, p.nome_obra, p.municipio, p.atividade, qtdTx(p.qtd_previsto),
+          p.origem === 'mariua' ? 'Sistema Mariuá' : 'Sistema RDO', futuro ? '' : rdoDaProg(p) ? 'Enviado' : 'Sem RDO'];
+      })));
+  }
+
+  function ligarProgramacao() {
+    $('ga-pg-ant').addEventListener('click', function () { irParaDia(somaDias(PG.dia, -1)); });
+    $('ga-pg-prox').addEventListener('click', function () { irParaDia(somaDias(PG.dia, 1)); });
+    $('ga-pg-data').addEventListener('change', function () { if (this.value) irParaDia(this.value); });
+    $('ga-pg-atalhos').addEventListener('click', function (e) { var b = e.target.closest('[data-d]'); if (b) irParaDia(somaDias(hojeISO(), +b.dataset.d)); });
+    $('ga-pg-nova').addEventListener('click', function () { abrirDialogoProg(null); });
+    $('ga-pg-copiar').addEventListener('click', abrirCopia);
+    $('ga-pg-csv').addEventListener('click', csvProg);
+    $('ga-pg-livres').addEventListener('click', function (e) { var b = e.target.closest('[data-pg-eq]'); if (b) abrirDialogoProg(null, b.dataset.pgEq); });
+    $('ga-pg-corpo').addEventListener('click', function (e) {
+      var ver = e.target.closest('[data-pg-rdo]');
+      if (ver) { var r = PG.rdos.filter(function (x) { return x.id === ver.dataset.pgRdo; })[0]; if (r && window.RDOAPP) window.RDOAPP.abrirLinha(r); return; }
+      var b = e.target.closest('[data-pg-acao]'); if (!b) return;
+      var id = b.closest('tr').dataset.pg, p = PG.itens.filter(function (x) { return String(x.id) === id; })[0]; if (!p) return;
+      if (b.dataset.pgAcao === 'editar') abrirDialogoProg(p); else tirarProg(p);
+    });
+    $('ga-dp-form').addEventListener('submit', function (e) { salvarProg(e, false); });
+    $('ga-dp-outra').addEventListener('click', function (e) { salvarProg(e, true); });
+    $('ga-dp-cancelar').addEventListener('click', function () { $('ga-dlg-prog').close(); });
+    $('ga-dp-pep').addEventListener('change', completarObra);
+    $('ga-dp-pep').addEventListener('input', function () { if (PG.obras[nc(this.value)]) completarObra(); });
+    $('ga-dp-form').addEventListener('input', function () { $('ga-dp-msg').textContent = ''; });
+    $('ga-dc-form').addEventListener('input', function () { $('ga-dc-msg').textContent = ''; });
+    $('ga-dc-form').addEventListener('submit', copiarProg);
+    $('ga-dc-cancelar').addEventListener('click', function () { $('ga-dlg-copia').close(); });
+    $('ga-sem').addEventListener('click', function (e) { if (e.target.closest('[data-ir-prog]')) { PG.dia = hojeISO(); abrirAba('programacao'); } });
+  }
+
   // ─── CSV ────────────────────────────────────────────────────────────────
   function baixarCsv(nome, linhas) {
     var csv = '\uFEFF' + linhas.map(function (l) {
@@ -816,6 +1137,7 @@
     document.querySelectorAll('.ga-painel').forEach(function (p) { p.hidden = p.id !== 'ga-' + aba; });
     try { history.replaceState(null, '', '#' + aba); } catch (e) {}
     if (aba === 'usuarios' && G.papel) carregarUsuarios(false);
+    if (aba === 'programacao' && G.papel) carregarProgramacao();
   }
   function filtrarRdos(f) {
     G.filtros = {}; G.filtros[f] = true;
@@ -895,10 +1217,10 @@
 
   function iniciar() {
     lerVersaoPublicada();
-    if (!G.ligado) { ligar(); ligarUsuarios(); G.ligado = true; }
+    if (!G.ligado) { ligar(); ligarUsuarios(); ligarProgramacao(); G.ligado = true; }
     aplicarPeriodo('7');
     var aba = (location.hash || '').replace('#', '');
-    abrirAba(['geral', 'rdos', 'producao', 'equipes', 'celulares', 'usuarios', 'config'].indexOf(aba) >= 0 ? aba : 'geral');
+    abrirAba(['geral', 'programacao', 'rdos', 'producao', 'equipes', 'celulares', 'usuarios', 'config'].indexOf(aba) >= 0 ? aba : 'geral');
     carregar();
     if (!G.relogio) G.relogio = setInterval(function () { if (document.visibilityState === 'visible' && G.papel) carregar(); }, 3 * 60 * 1000);
   }
@@ -1007,6 +1329,7 @@
       try { await G.sb.auth.signOut({ scope: 'local' }); } catch (e) {}
       G.user = null; G.papel = null; window.MARIUA_USER = null;
       U.lista = []; U.carregado = false; U.erro = null;
+      PG.itens = []; PG.rdos = []; PG.carregado = false; PG.dia = '';
       mostrarLogin();
     };
     $('g-sair').addEventListener('click', sair);

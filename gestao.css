@@ -319,3 +319,19 @@ tr.ga-inativo td{opacity:.62}
 .ga-entrega-bts .m-bt{text-decoration:none}
 .ga-dlg-bts{display:flex;justify-content:flex-end;gap:8px;padding:12px 22px 18px;border-top:1px solid #edf2f7}
 .ga-dlg [hidden]{display:none !important}
+
+/* ───────── aba Programação (obras programadas direto no Sistema RDO) ───────── */
+.ga-pg-dia{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ga-pg-dia>.m-bt-peq{padding:6px 8px}
+.ga-pg-seta{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.ga-pg-nome{font-size:.92rem;font-weight:800;color:#0b5e62;margin-left:4px}
+.ga-pg-livres{display:flex;flex-wrap:wrap;gap:6px;padding:14px 18px}
+.ga-pg-livres .m-bt .ti{font-size:14px}
+button.ga-pg-ver{border:1px solid #b7e0c6;cursor:pointer;font-family:'Barlow',sans-serif}
+button.ga-pg-ver:hover{background:#cdebd8}
+.ga-pg-chamada{padding:0 18px 18px}
+.ga-tab-prog{min-width:820px}
+.ga-dp-linha>.ga-campo{flex:1 1 140px;min-width:0}
+.ga-dp-linha>.ga-dp-largo{flex:2 1 220px}
+.ga-dlg-corpo .ga-campo .m-select{max-width:none;width:100%;padding:9px 10px;font-size:.95rem;font-weight:600}
+@media(max-width:640px){.ga-pg-nome{flex-basis:100%;margin-left:0}}

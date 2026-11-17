@@ -343,6 +343,18 @@ input::placeholder,textarea::placeholder{color:var(--tinta-2);opacity:.75;font-w
 .aviso-t.erro{background:#8f1d14}
 .aviso-t.ok{background:#17663b}
 
+/* ───────── programação do dia: botão Sincronizar ───────── */
+.sec-cab{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:26px 0 4px}
+.sec-cab .sec-tit{margin:0}
+.bt-sinc{gap:8px;padding:0 16px;flex-shrink:0}
+.bt-sinc svg{width:20px;height:20px}
+.bt-sinc:disabled{opacity:.7}
+.bt-sinc[aria-busy="true"] svg{animation:gira 1s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+.sec-nota{color:var(--tinta-2);font-size:.9rem;font-weight:600;margin:0 0 8px}
+.linhas li.nova .linha{animation:realce 2.4s ease-out}
+.linha-tx .etq-nova{display:inline-block;margin:0 6px 0 0;padding:1px 8px;border-radius:10px;background:var(--sinal);color:var(--sinal-tx);font-size:.78rem;font-weight:700;vertical-align:1px}
+
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none !important;transition:none !important}
 }

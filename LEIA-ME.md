@@ -1,6 +1,6 @@
 # Sistema RDO · Mariuá
 
-Sistema separado do site turno-hoje, com duas partes. A **gestão**, para o escritório, fica em `https://joaopedro0313.github.io/SISTEMA-RDO/`. O **app de campo**, para o encarregado lançar o RDO com fotos no celular, fica em `https://joaopedro0313.github.io/SISTEMA-RDO/campo/`. O sistema usa o mesmo banco (Supabase) e as mesmas contas do sistema Mariuá, e por isso lê de lá o Cadastro de Equipes e a Programação, mas não depende de nenhum arquivo do turno-hoje.
+Sistema separado do site turno-hoje, com duas partes. A **gestão**, para o escritório, fica em `https://joaopedro0313.github.io/SISTEMA-RDO/`. O **app de campo**, para o encarregado lançar o RDO com fotos no celular, fica em `https://joaopedro0313.github.io/SISTEMA-RDO/campo/`. O sistema usa o mesmo banco (Supabase) e as mesmas contas do sistema Mariuá, e por isso lê de lá o Cadastro de Equipes e a Programação Diária, mas não depende de nenhum arquivo do turno-hoje. A programação das obras também pode ser feita direto no Sistema RDO, na aba Programação da gestão.
 
 ## O que tem no repositório
 
@@ -8,7 +8,7 @@ O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão, e o `modo.js`
 
 ## Como colocar no ar
 
-Primeiro, no Supabase, abra SQL Editor → New query, cole o `rdo_campo.sql` inteiro e clique em Run; pode rodar de novo sem perder nada. Depois, no GitHub, em Settings → Pages, escolha "Deploy from a branch", o ramo `main` e a pasta `/ (root)`, e salve: em um ou dois minutos os dois endereços ficam no ar.
+Primeiro, no Supabase, abra SQL Editor → New query, cole o `rdo_campo.sql` inteiro e clique em Run; pode rodar de novo sem perder nada. Quem já tinha rodado uma versão anterior roda o arquivo atualizado do mesmo jeito, e ganha a programação de obras pelo Sistema RDO (seção 10 do arquivo). Depois, no GitHub, em Settings → Pages, escolha "Deploy from a branch", o ramo `main` e a pasta `/ (root)`, e salve: em um ou dois minutos os dois endereços ficam no ar.
 
 Para o "Esqueci a senha" voltar para o Sistema RDO, no Supabase, em Authentication → URL Configuration → Redirect URLs, acrescente `https://joaopedro0313.github.io/SISTEMA-RDO/**`. Sem isso, o link de senha nova continua indo para o site do sistema Mariuá, que também funciona.
 
@@ -24,7 +24,7 @@ A página `https://joaopedro0313.github.io/SISTEMA-RDO/baixar/` tem os dois APKs
 
 ## Modo de teste (sem login)
 
-A pasta `demo/` é uma versão de teste do sistema, sem login e sem banco. A gestão de teste fica em `https://joaopedro0313.github.io/SISTEMA-RDO/demo/` e o app de teste em `https://joaopedro0313.github.io/SISTEMA-RDO/demo/campo/`. Elas usam o mesmo código do sistema real, mas no lugar do Supabase há um banco simulado, guardado só no navegador, com uma semana de RDOs de exemplo, as equipes, a programação do dia e a lista de serviços. Nada vai para o banco de verdade, e o teste funciona mesmo antes de rodar o `rdo_campo.sql`.
+A pasta `demo/` é uma versão de teste do sistema, sem login e sem banco. A gestão de teste fica em `https://joaopedro0313.github.io/SISTEMA-RDO/demo/` e o app de teste em `https://joaopedro0313.github.io/SISTEMA-RDO/demo/campo/`. Elas usam o mesmo código do sistema real, mas no lugar do Supabase há um banco simulado, guardado só no navegador, com uma semana de RDOs de exemplo, as equipes, a programação do dia (a do sistema Mariuá e obras programadas no Sistema RDO para hoje e amanhã) e a lista de serviços. Nada vai para o banco de verdade, e o teste funciona mesmo antes de rodar o `rdo_campo.sql`.
 
 A gestão de teste abre como gestor e o app de teste como o encarregado Alan. Abertas as duas no mesmo navegador, o RDO enviado pelo app de teste aparece na gestão de teste na hora. O selo "MODO DE TESTE", no topo, recomeça o teste com os dados iniciais; os dados de exemplo também se renovam sozinhos a cada dia. Para testar outro usuário, toque em Sair e entre com joao.araujo (gestor), maria.escritorio (escritório), alan ou bruno (encarregados), com qualquer senha. No celular, o app de teste funciona sozinho, com os dados guardados no próprio aparelho. Para tirar o modo de teste do ar, apague a pasta `demo/` do repositório.
 
@@ -42,11 +42,23 @@ As contas são as mesmas do sistema Mariuá: a aba usa as funções que o Admin 
 
 ## A gestão
 
-A Visão geral mostra os números do período (RDOs recebidos, equipes que mandaram, fotos, horas paradas, serviços fora da lista e celulares com fila parada), quem estava programado hoje e ainda não mandou RDO, e o que precisa ser conferido. Em RDOs ficam todos os RDOs do período, com busca, filtros, o RDO completo com fotos e download em CSV. Produção soma a quantidade de cada serviço da lista, por serviço ou por equipe, também com CSV. Equipes mostra a situação de cada equipe do Cadastro, e Celulares mostra a versão do app, o último contato e a fila de envio de cada celular. Em Usuários, o gestor cria e gerencia as contas. Em Configurações, o gestor define o recado para os encarregados, as fotos mínimas por RDO, se o horário de término é obrigatório, os motivos de paralisação e a versão mínima do app, além da lista de serviços, do QR code e do acesso à gestão.
+A Programação é onde o escritório programa as obras de cada equipe por dia (veja a seção abaixo). A Visão geral mostra os números do período (RDOs recebidos, equipes que mandaram, fotos, horas paradas, serviços fora da lista e celulares com fila parada), quem estava programado hoje e ainda não mandou RDO, e o que precisa ser conferido. Em RDOs ficam todos os RDOs do período, com busca, filtros, o RDO completo com fotos e download em CSV. Produção soma a quantidade de cada serviço da lista, por serviço ou por equipe, também com CSV. Equipes mostra a situação de cada equipe do Cadastro, e Celulares mostra a versão do app, o último contato e a fila de envio de cada celular. Em Usuários, o gestor cria e gerencia as contas. Em Configurações, o gestor define o recado para os encarregados, as fotos mínimas por RDO, se o horário de término é obrigatório, os motivos de paralisação e a versão mínima do app, além da lista de serviços, do QR code e do acesso à gestão.
+
+## Programação de obras (direto pelo Sistema RDO)
+
+A programação das obras pode ser feita direto no Sistema RDO, na aba Programação da gestão, sem passar pelo sistema Mariuá. Programam os gestores e as pessoas do escritório liberadas em Acesso à gestão; o encarregado só recebe, no app, o que é da equipe dele.
+
+A aba mostra um dia por vez, com setas e atalhos para hoje e amanhã, e lista por equipe a obra, a atividade, a quantidade prevista e se o RDO dela já chegou; o RDO abre direto da linha. Em Programar obra, escolha o dia e a equipe e escreva o PEP ou o nome da obra; se o PEP já apareceu antes, o nome e o município se preenchem sozinhos. A atividade e a quantidade prevista aparecem para o encarregado como dica na hora de apontar os serviços. Mudar e Tirar ficam na própria linha, e Programar e fazer outra serve para lançar várias obras seguidas. Embaixo, a lista de equipes sem obra no dia ajuda a não esquecer ninguém: um clique na equipe já abre a programação dela. O botão Baixar (CSV) tira a programação do dia em planilha.
+
+Copiar de outro dia repete a programação de um dia em outro, para as equipes que continuam na mesma obra, sem duplicar o que já está programado no dia de destino. Marcando a opção de incluir a Programação Diária do sistema Mariuá, as obras de lá daquele dia passam a ser do Sistema RDO e podem ser mudadas aqui, o que ajuda a deixar de programar no sistema Mariuá aos poucos.
+
+A Programação Diária do sistema Mariuá continua valendo: ela aparece na aba marcada como Sistema Mariuá, só para leitura (muda lá), e o app mostra as duas juntas. As duas contam em "Programadas hoje sem RDO" e na situação das equipes. Só dá para programar equipes do Cadastro de Equipes, porque é por ele que o encarregado escolhe a equipe no app.
+
+A obra programada chega ao celular quando o app busca os dados do dia: ao abrir a tela inicial com internet, no máximo a cada meia hora. Para ver na hora, o encarregado toca em **Sincronizar**, ao lado de "Programado para hoje" na tela inicial: o app busca a programação, avisa quantas obras novas chegaram (elas ficam marcadas como Nova por alguns minutos) e aproveita o sinal para mandar os RDOs que estiverem na fila. Embaixo do título aparece a hora da última sincronização; sem internet, o app mostra a última programação baixada e diz de que horas ela é. O botão está no app desde a versão 1.2.6.
 
 ## O app de campo
 
-O encarregado entra com usuário e senha, escolhe a equipe uma vez e vê o que está programado para o dia. O RDO já vem com a obra da Programação; ele marca o clima, quem trabalhou, aponta os serviços pela lista e tira as fotos, que saem carimbadas com data, hora, equipe, GPS e obra. Tudo fica salvo no celular enquanto ele preenche, e o app funciona sem internet: ao tocar em Enviar, o RDO entra numa fila e sobe sozinho quando o celular pega sinal, sem duplicar. O envio acontece com o app aberto.
+O encarregado entra com usuário e senha, escolhe a equipe uma vez e vê o que está programado para o dia. O RDO já vem com a obra programada (pelo Sistema RDO ou pela Programação Diária do sistema Mariuá); ele marca o clima, quem trabalhou, aponta os serviços pela lista e tira as fotos, que saem carimbadas com data, hora, equipe, GPS e obra. Tudo fica salvo no celular enquanto ele preenche, e o app funciona sem internet: ao tocar em Enviar, o RDO entra numa fila e sobe sozinho quando o celular pega sinal, sem duplicar. O envio acontece com o app aberto.
 
 ## Lista de serviços (apontamento)
 

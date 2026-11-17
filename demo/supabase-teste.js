@@ -129,6 +129,17 @@
       { id: 'p8', data: hoje, encarregado: 'FABIO NUNES', pep: 'OS 88123', nome_obra: 'Poda e manutenção Rua A', municipio: 'Serrinha', atividade: 'Poda urbana', qtd_previsto: 10 },
       { id: 'p9', data: hoje, encarregado: 'ZECA SEM CADASTRO', pep: 'PEP-2026-0455', nome_obra: 'Ligação nova Loteamento Sol', municipio: 'Feira de Santana', atividade: 'Ligação de cliente', qtd_previsto: 4 }
     ];
+    // programação feita direto no Sistema RDO (a de cima faz o papel da Programação Diária do sistema Mariuá)
+    var amanha = dia(-1), feitoEm = quando(1, 16, 20), porQuem = 'maria.escritorio@mariua.com.br';
+    var programacao = [
+      [hoje, EQUIPES[6], 'PEP-2026-0388', 'Melhoria BT Centro', 'Irecê', 'Instalação de cruzeta', 2],
+      [amanha, EQUIPES[0], 'PEP-2026-0412', 'Extensão de rede Lagoa Grande', 'Irecê', 'Implantação de poste', 6],
+      [amanha, EQUIPES[1], 'PEP-2026-0501', 'Reforço rede rural Várzea', 'Jacobina', 'Lançamento de cabo', 280],
+      [amanha, EQUIPES[2], 'PEP-2026-0455', 'Ligação nova Loteamento Sol', 'Feira de Santana', 'Ligação de cliente', 10]
+    ].map(function (x, i) {
+      return { id: uuidTeste(900 + i), data: x[0], equipe_codigo: x[1].codigo, encarregado: x[1].encarregado, pep: x[2], nome_obra: x[3],
+               municipio: x[4], atividade: x[5], qtd_previsto: x[6], criado_em: feitoEm, criado_por: porQuem, atualizado_em: feitoEm, atualizado_por: porQuem };
+    });
     var catalogo = CATALOGO.map(function (x) {
       return { contrato: CONTRATO, codigo: x[0], descricao: x[1], unidade: x[2], casas_decimais: x[3], grupo: x[4], ativo: true,
                atualizado_em: quando(0, 9, 30), atualizado_por: 'joao.araujo@mariua.com.br' };
@@ -142,7 +153,7 @@
     })).concat([{ email: 'kleber@mariua.com.br', nome: 'Kléber Dias', matricula: '1011', gestor: false, ativo: false, criado_em: quando(120, 10) }]);
     return {
       contas: contas,
-      rdo_campo: rdos, rdo_campo_aparelhos: aparelhos, prog: prog, servicos_catalogo: catalogo,
+      rdo_campo: rdos, rdo_campo_aparelhos: aparelhos, prog: prog, rdo_programacao: programacao, servicos_catalogo: catalogo,
       rdo_campo_config: [{ id: 1, atualizado_em: quando(2, 10), atualizado_por: 'joao.araujo@mariua.com.br', dados: {
         aviso: 'Este é o modo de teste. Os RDOs ficam só neste navegador.', aviso_ativo: true, fotos_minimas: 1, exigir_termino: false, versao_minima: '',
         motivos: ['Chuva', 'Falta de material', 'Desligamento não liberado', 'Interferência de terceiros', 'Veículo ou equipamento', 'Acidente ou incidente', 'Outro'] } }],
@@ -183,10 +194,10 @@
   // Semeia uma vez por dia: no dia seguinte o teste recomeça com datas novas.
   var pronto = (async function () {
     var marca = await banco.ler('_semente');
-    if (!marca || marca.dia !== dia(0) || !marca.contas) {
+    if (!marca || marca.dia !== dia(0) || !marca.contas || marca.v !== 2) {
       var s = semente();
       for (var k in s) await banco.gravar(k, s[k]);
-      await banco.gravar('_semente', { dia: dia(0), em: Date.now(), contas: true });
+      await banco.gravar('_semente', { dia: dia(0), em: Date.now(), contas: true, v: 2 });
     }
   })();
   async function tabela(n) { await pronto; return (await banco.ler(n)) || []; }
@@ -384,22 +395,109 @@
     rdo_campo_equipes: async function () { return EQUIPES.map(function (q) { return Object.assign({ utd: '', supervisor: '', tipo: '', veiculo: '' }, q); }); },
     rdo_campo_contexto: async function (p) {
       var alvo = norm(p.p_encarregado);
-      var prog = (await tabela('prog')).filter(function (x) { return x.data === p.p_data && casa(norm(x.encarregado), alvo); });
+      var cods = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), alvo); }).map(function (q) { return norm(q.codigo); });
+      var mariua = (await tabela('prog')).filter(function (x) { return x.data === p.p_data && casa(norm(x.encarregado), alvo); });
+      var proprio = (await tabela('rdo_programacao')).filter(function (x) {
+        return x.data === p.p_data && (cods.indexOf(norm(x.equipe_codigo)) >= 0 || casa(norm(x.encarregado), alvo));
+      }).sort(function (a, b) { return String(a.criado_em).localeCompare(String(b.criado_em)); });
       var eq = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), alvo); })[0];
       return {
-        programacao: prog.map(function (x) { return { id: x.id, pep: x.pep, nome_obra: x.nome_obra, municipio: x.municipio, atividade: x.atividade, atividade_cod: '', tipo: '', turno: '', qtd_previsto: x.qtd_previsto }; }),
+        programacao: mariua.map(function (x) { return { id: x.id, pep: x.pep, nome_obra: x.nome_obra, municipio: x.municipio, atividade: x.atividade, atividade_cod: '', tipo: '', turno: '', qtd_previsto: x.qtd_previsto, origem: 'mariua' }; })
+          .concat(proprio.map(function (x) { return { id: x.id, pep: x.pep || '', nome_obra: x.nome_obra || '', municipio: x.municipio || '', atividade: x.atividade || '', atividade_cod: '', tipo: '', turno: '', qtd_previsto: x.qtd_previsto, origem: 'rdo' }; })),
         efetivo: (eq && EFETIVO[eq.codigo] ? EFETIVO[eq.codigo] : []).map(function (f) { return { matricula: f[0], nome: f[1], funcao: f[2] }; })
       };
     },
     rdo_campo_programados: async function (p) {
       var grupos = {};
+      var juntar = function (codigo, encarregado, obras) {
+        var k = codigo ? 'C:' + norm(codigo) : 'E:' + norm(encarregado);
+        var g = grupos[k] || (grupos[k] = { encarregado: encarregado, codigo: codigo || null, obras: 0 });
+        g.obras += obras;
+      };
+      var porEnc = {};
       (await tabela('prog')).filter(function (x) { return x.data === p.p_data; }).forEach(function (x) {
-        var n = norm(x.encarregado); (grupos[n] = grupos[n] || { encarregado: x.encarregado, obras: 0 }).obras++;
+        var n = norm(x.encarregado); (porEnc[n] = porEnc[n] || { encarregado: x.encarregado, obras: 0 }).obras++;
       });
-      return Object.keys(grupos).map(function (n) {
+      Object.keys(porEnc).forEach(function (n) {
         var eq = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), n); })[0];
-        return { encarregado: grupos[n].encarregado, codigo: eq ? eq.codigo : null, obras: grupos[n].obras };
+        juntar(eq ? eq.codigo : null, eq ? eq.encarregado : porEnc[n].encarregado, porEnc[n].obras);
       });
+      (await tabela('rdo_programacao')).filter(function (x) { return x.data === p.p_data; }).forEach(function (x) {
+        var eq = EQUIPES.filter(function (q) { return norm(q.codigo) === norm(x.equipe_codigo); })[0];
+        juntar(x.equipe_codigo, eq ? eq.encarregado : x.encarregado, 1);
+      });
+      return Object.keys(grupos).map(function (k) { return grupos[k]; });
+    },
+    rdo_programacao_dia: async function (p) {
+      if (!(await papel())) throw new Error('Só quem tem acesso à gestão vê a programação.');
+      var mariua = (await tabela('prog')).filter(function (x) { return x.data === p.p_data; }).map(function (x) {
+        var eq = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), norm(x.encarregado)); })[0];
+        return { id: x.id, origem: 'mariua', data: x.data, equipe_codigo: eq ? eq.codigo : '', encarregado: x.encarregado, pep: x.pep, nome_obra: x.nome_obra,
+                 municipio: x.municipio, atividade: x.atividade, turno: '', qtd_previsto: x.qtd_previsto };
+      });
+      var proprio = (await tabela('rdo_programacao')).filter(function (x) { return x.data === p.p_data; })
+        .sort(function (a, b) { return String(a.criado_em).localeCompare(String(b.criado_em)); })
+        .map(function (x) { return Object.assign({ origem: 'rdo' }, x); });
+      return mariua.concat(proprio);
+    },
+    rdo_programacao_salvar: async function (p) {
+      if (!(await papel())) throw new Error('Só quem tem acesso à gestão programa obras.');
+      var it = p.p_item || {}, tx = function (v, n) { return String(v == null ? '' : v).trim().slice(0, n) || null; };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(it.data || ''))) throw new Error('Escolha o dia da programação.');
+      if (!String(it.equipe_codigo || '').trim()) throw new Error('Escolha a equipe.');
+      var eq = EQUIPES.filter(function (q) { return norm(q.codigo) === norm(it.equipe_codigo); })[0];
+      if (!eq) throw new Error('A equipe ' + String(it.equipe_codigo).trim() + ' não está no Cadastro de Equipes. O app só mostra a programação de equipes do cadastro.');
+      if (!tx(it.pep, 60) && !tx(it.nome_obra, 160)) throw new Error('Escreva o PEP ou o nome da obra.');
+      var q = String(it.qtd_previsto == null ? '' : it.qtd_previsto).trim().replace(',', '.'), qtd = null;
+      if (q) { if (!/^\d+(\.\d+)?$/.test(q)) throw new Error('Quantidade prevista inválida. Use só números, como 6 ou 320,5.'); qtd = +q; }
+      var linhas = await tabela('rdo_programacao'), agora = new Date().toISOString(), quem = usuarioAtual(), linha;
+      var dados = { data: it.data, equipe_codigo: eq.codigo, encarregado: eq.encarregado, pep: tx(it.pep, 60), nome_obra: tx(it.nome_obra, 160),
+                    municipio: tx(it.municipio, 80), atividade: tx(it.atividade, 160), qtd_previsto: qtd, atualizado_em: agora, atualizado_por: quem };
+      if (it.id) {
+        linha = linhas.filter(function (x) { return x.id === it.id; })[0];
+        if (!linha) throw new Error(/^p\d+$/.test(String(it.id)) ? 'Só dá para mudar aqui as obras programadas no Sistema RDO. As do sistema Mariuá mudam lá.'
+                                                                  : 'Essa obra programada não existe mais. Toque em Atualizar.');
+        Object.assign(linha, dados);
+      } else {
+        linha = Object.assign({ id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : uuidTeste(Date.now() % 1e9), criado_em: agora, criado_por: quem }, dados);
+        linhas.push(linha);
+      }
+      await salvar('rdo_programacao', linhas);
+      return Object.assign({ origem: 'rdo' }, linha);
+    },
+    rdo_programacao_excluir: async function (p) {
+      if (!(await papel())) throw new Error('Só quem tem acesso à gestão tira obras da programação.');
+      var linhas = await tabela('rdo_programacao'), resto = linhas.filter(function (x) { return x.id !== p.p_id; });
+      if (resto.length === linhas.length) throw new Error('Essa obra programada não existe mais. Toque em Atualizar.');
+      await salvar('rdo_programacao', resto);
+      return null;
+    },
+    rdo_programacao_copiar: async function (p) {
+      if (!(await papel())) throw new Error('Só quem tem acesso à gestão programa obras.');
+      if (!p.p_de || !p.p_para) throw new Error('Escolha os dois dias.');
+      if (p.p_de === p.p_para) throw new Error('Escolha dois dias diferentes.');
+      var linhas = await tabela('rdo_programacao'), prog = await tabela('prog'), agora = new Date().toISOString(), quem = usuarioAtual();
+      var origem = linhas.filter(function (x) { return x.data === p.p_de; }).sort(function (a, b) { return String(a.criado_em).localeCompare(String(b.criado_em)); });
+      if (p.p_com_mariua) origem = origem.concat(prog.filter(function (x) { return x.data === p.p_de; }).map(function (x) {
+        var eq = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), norm(x.encarregado)); })[0];
+        return { equipe_codigo: eq ? eq.codigo : null, encarregado: eq ? eq.encarregado : x.encarregado, pep: x.pep, nome_obra: x.nome_obra, municipio: x.municipio,
+                 atividade: x.atividade, qtd_previsto: typeof x.qtd_previsto === 'number' ? x.qtd_previsto : null };
+      }));
+      var igual = function (a, b) { return norm(a.pep) === norm(b.pep) && norm(a.nome_obra) === norm(b.nome_obra) && norm(a.atividade) === norm(b.atividade); };
+      var r = { copiadas: 0, repetidas: 0, sem_equipe: 0 };
+      origem.forEach(function (o) {
+        if (!o.equipe_codigo || (!o.pep && !o.nome_obra)) { r.sem_equipe++; return; }
+        var ja = linhas.some(function (x) { return x.data === p.p_para && norm(x.equipe_codigo) === norm(o.equipe_codigo) && igual(x, o); }) ||
+                 prog.some(function (x) { return x.data === p.p_para && casa(norm(x.encarregado), norm(o.encarregado)) && igual(x, o); });
+        if (ja) { r.repetidas++; return; }
+        linhas.push({ id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : uuidTeste(Date.now() % 1e9 + r.copiadas), data: p.p_para,
+                      equipe_codigo: o.equipe_codigo, encarregado: o.encarregado, pep: o.pep || null, nome_obra: o.nome_obra || null, municipio: o.municipio || null,
+                      atividade: o.atividade || null, qtd_previsto: o.qtd_previsto == null ? null : o.qtd_previsto,
+                      criado_em: agora, criado_por: quem, atualizado_em: agora, atualizado_por: quem });
+        r.copiadas++;
+      });
+      await salvar('rdo_programacao', linhas);
+      return r;
     },
     rdo_campo_servicos: async function () {
       return (await tabela('servicos_catalogo')).filter(function (x) { return x.ativo; })

@@ -9,7 +9,7 @@
 <link rel="icon" href="campo/icons/favicon-32.png" sizes="32x32">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
-<link rel="stylesheet" href="gestao.css?v=3">
+<link rel="stylesheet" href="gestao.css?v=4">
 </head>
 <body>
 <div class="top-bar">
@@ -74,7 +74,7 @@
 <div class="page-hdr">
   <div>
     <h2>Gestão do app de campo</h2>
-    <p id="ga-sub">RDOs que os encarregados mandam pelo celular, produção, celulares e configurações do app.</p>
+    <p id="ga-sub">Programação das obras, RDOs que os encarregados mandam pelo celular, produção, celulares e configurações do app.</p>
   </div>
   <div class="m-acoes">
     <button type="button" class="m-bt" id="ga-atualizar"><i class="ti ti-refresh" aria-hidden="true"></i>Atualizar</button>
@@ -104,6 +104,7 @@
 
   <div class="m-abas ga-abas" role="tablist" aria-label="Partes da gestão">
     <button type="button" class="m-aba" role="tab" id="ga-t-geral" aria-controls="ga-geral" aria-selected="true">Visão geral</button>
+    <button type="button" class="m-aba" role="tab" id="ga-t-programacao" aria-controls="ga-programacao" aria-selected="false">Programação</button>
     <button type="button" class="m-aba" role="tab" id="ga-t-rdos" aria-controls="ga-rdos" aria-selected="false">RDOs</button>
     <button type="button" class="m-aba" role="tab" id="ga-t-producao" aria-controls="ga-producao" aria-selected="false">Produção</button>
     <button type="button" class="m-aba" role="tab" id="ga-t-equipes" aria-controls="ga-equipes" aria-selected="false">Equipes</button>
@@ -127,6 +128,34 @@
     <div class="m-cartao">
       <div class="m-cartao-cab"><span class="m-h2"><i class="ti ti-alert-triangle" aria-hidden="true"></i>Para conferir</span></div>
       <div class="m-cartao-corpo ga-alertas" id="ga-alertas"></div>
+    </div>
+  </section>
+
+  <section class="ga-painel" id="ga-programacao" role="tabpanel" aria-labelledby="ga-t-programacao" hidden>
+    <div class="m-cartao">
+      <div class="m-cartao-cab ga-ferr">
+        <div class="ga-pg-dia">
+          <button type="button" class="m-bt m-bt-peq" id="ga-pg-ant" aria-label="Dia anterior" title="Dia anterior"><svg class="ga-pg-seta" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <input type="date" class="m-select" id="ga-pg-data" aria-label="Dia da programação">
+          <button type="button" class="m-bt m-bt-peq" id="ga-pg-prox" aria-label="Dia seguinte" title="Dia seguinte"><svg class="ga-pg-seta" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+          <div class="m-abas" id="ga-pg-atalhos" aria-label="Atalhos de dia">
+            <button type="button" class="m-aba" data-d="0">Hoje</button>
+            <button type="button" class="m-aba" data-d="1">Amanhã</button>
+          </div>
+          <span class="ga-pg-nome" id="ga-pg-nome"></span>
+        </div>
+        <div class="ga-bts">
+          <button type="button" class="m-bt m-bt-peq" id="ga-pg-csv"><i class="ti ti-download" aria-hidden="true"></i>Baixar (CSV)</button>
+          <button type="button" class="m-bt m-bt-peq" id="ga-pg-copiar"><i class="ti ti-copy" aria-hidden="true"></i>Copiar de outro dia</button>
+          <button type="button" class="m-bt m-bt-pri" id="ga-pg-nova"><i class="ti ti-calendar-plus" aria-hidden="true"></i>Programar obra</button>
+        </div>
+      </div>
+      <div class="ga-rola"><table class="m-tabela ga-tab-prog"><thead><tr><th>Equipe</th><th>Obra</th><th>Atividade</th><th>Previsto</th><th>RDO</th><th><span class="ga-oculto">Ações</span></th></tr></thead><tbody id="ga-pg-corpo"></tbody></table></div>
+      <p class="m-meta ga-rodape" id="ga-pg-resumo"></p>
+    </div>
+    <div class="m-cartao">
+      <div class="m-cartao-cab"><span class="m-h2"><i class="ti ti-users" aria-hidden="true"></i>Equipes sem obra programada neste dia</span><span class="m-selo" id="ga-pg-livres-n">0</span></div>
+      <div id="ga-pg-livres"></div>
     </div>
   </section>
 
@@ -280,10 +309,53 @@
     </div>
   </form>
 </dialog>
+<dialog class="ga-dlg" id="ga-dlg-prog" aria-labelledby="ga-dp-tit">
+  <form id="ga-dp-form" novalidate>
+    <div class="ga-dlg-cab"><h3 id="ga-dp-tit">Programar obra</h3><p class="m-meta" id="ga-dp-sub"></p></div>
+    <div class="ga-dlg-corpo">
+      <div class="ga-linha ga-dp-linha">
+        <label class="ga-campo">Dia<input type="date" id="ga-dp-data" class="m-select"></label>
+        <label class="ga-campo ga-dp-largo">Equipe<select id="ga-dp-equipe" class="m-select"></select></label>
+      </div>
+      <label class="ga-campo">PEP ou OS<input type="text" id="ga-dp-pep" list="ga-dp-peps" autocomplete="off" maxlength="60" placeholder="Ex.: PEP-2026-0412"><datalist id="ga-dp-peps"></datalist></label>
+      <label class="ga-campo">Nome da obra<input type="text" id="ga-dp-nome" autocomplete="off" maxlength="160"></label>
+      <div class="ga-linha ga-dp-linha">
+        <label class="ga-campo ga-dp-largo">Município<input type="text" id="ga-dp-mun" list="ga-dp-muns" autocomplete="off" maxlength="80"><datalist id="ga-dp-muns"></datalist></label>
+        <label class="ga-campo">Quantidade prevista<input type="text" id="ga-dp-qtd" inputmode="decimal" autocomplete="off" placeholder="Opcional"></label>
+      </div>
+      <label class="ga-campo">Atividade<input type="text" id="ga-dp-ativ" list="ga-dp-ativs" autocomplete="off" maxlength="160" placeholder="Ex.: Implantação de poste"><datalist id="ga-dp-ativs"></datalist></label>
+      <p class="m-meta">No app, a atividade e a quantidade prevista aparecem como dica quando o encarregado aponta os serviços.</p>
+      <p class="ga-du-msg" id="ga-dp-msg" role="alert"></p>
+    </div>
+    <div class="ga-dlg-bts">
+      <button type="button" class="m-bt" id="ga-dp-cancelar">Cancelar</button>
+      <button type="button" class="m-bt" id="ga-dp-outra">Programar e fazer outra</button>
+      <button type="submit" class="m-bt m-bt-pri" id="ga-dp-salvar">Programar</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="ga-dlg" id="ga-dlg-copia" aria-labelledby="ga-dc-tit">
+  <form id="ga-dc-form" novalidate>
+    <div class="ga-dlg-cab"><h3 id="ga-dc-tit">Copiar programação</h3><p class="m-meta">Copia as obras de todas as equipes, para quem continua na mesma obra. O que já está programado no dia de destino não se repete.</p></div>
+    <div class="ga-dlg-corpo">
+      <div class="ga-linha ga-dp-linha">
+        <label class="ga-campo">Copiar do dia<input type="date" id="ga-dc-de" class="m-select"></label>
+        <label class="ga-campo">Para o dia<input type="date" id="ga-dc-para" class="m-select"></label>
+      </div>
+      <label class="ga-check"><input type="checkbox" id="ga-dc-mariua"> Incluir as obras da Programação Diária do sistema Mariuá</label>
+      <p class="m-meta">Com essa opção, as obras do sistema Mariuá daquele dia passam a ser programadas aqui no Sistema RDO, e podem ser mudadas nesta tela.</p>
+      <p class="ga-du-msg" id="ga-dc-msg" role="alert"></p>
+    </div>
+    <div class="ga-dlg-bts">
+      <button type="button" class="m-bt" id="ga-dc-cancelar">Cancelar</button>
+      <button type="submit" class="m-bt m-bt-pri" id="ga-dc-copiar">Copiar</button>
+    </div>
+  </form>
+</dialog>
 <div class="m-toast" id="ga-toast" role="status" aria-live="polite"></div>
 
 <script src="campo/vendor/supabase-2.118.0.js"></script>
 <script src="rdo-app.js?v=4"></script>
-<script src="gestao-app.js?v=3"></script>
+<script src="gestao-app.js?v=4"></script>
 </body>
 </html>

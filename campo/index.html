@@ -105,7 +105,14 @@
       <div class="aviso" id="ini-aviso" hidden></div>
 
       <div id="ini-prog-bloco" hidden>
-        <h2 class="sec-tit">Programado para hoje</h2>
+        <div class="sec-cab">
+          <h2 class="sec-tit">Programado para hoje</h2>
+          <button class="bt bt-linha bt-p bt-sinc" type="button" id="ini-sinc" aria-describedby="ini-prog-quando">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.4L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.6 4.4L20 16"/><path d="M20 21v-5h-5"/></svg>
+            <span id="ini-sinc-tx">Sincronizar</span>
+          </button>
+        </div>
+        <p class="sec-nota" id="ini-prog-quando" aria-live="polite"></p>
         <ul class="linhas" id="ini-prog"></ul>
       </div>
 

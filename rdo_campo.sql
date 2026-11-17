@@ -14,7 +14,9 @@
 --   7. o que a gestão usa: celulares, configurações do app e quem estava
 --      programado no dia;
 --   8. quem acessa a gestão (Sistema RDO separado) e quem lê os dados;
---   9. senha nova definida pelo gestor (aba Usuários).
+--   9. senha nova definida pelo gestor (aba Usuários);
+--  10. a programação de obras feita direto no Sistema RDO (aba Programação),
+--      que o app recebe junto com a Programação Diária do sistema Mariuá.
 --
 --  O app NÃO grava no turno_data. O site lê esta tabela (rdo-app.js no rdo.html).
 -- ============================================================================
@@ -144,71 +146,12 @@ language sql stable security definer set search_path = public as $$
   where btrim(coalesce(e->>'encarregado', '')) <> ''
 $$;
 
--- Programação do dia (turno_data, chave prog_diaria) e quem trabalha com o
--- encarregado (chave funcionario_equipe + tabela funcionarios).
--- Devolve só o que é da equipe: o celular não baixa a programação inteira.
-create or replace function public.rdo_campo_contexto(p_data date, p_encarregado text)
-returns jsonb
-language plpgsql stable security definer set search_path = public as $$
-declare
-  alvo text := public.rdo_campo_norm(p_encarregado);
-  dia  text := to_char(p_data, 'YYYY-MM-DD');
-  prog jsonb := '[]'::jsonb;
-  efet jsonb := '[]'::jsonb;
-begin
-  if alvo = '' or p_data is null then
-    return jsonb_build_object('programacao', prog, 'efetivo', efet);
-  end if;
-
-  select coalesce(jsonb_agg(jsonb_build_object(
-           'id',            e->>'id',
-           'pep',           coalesce(e->>'pep', ''),
-           'nome_obra',     coalesce(e->>'nome_obra', ''),
-           'municipio',     coalesce(e->>'municipio', ''),
-           'atividade',     coalesce(e->>'atividade', ''),
-           'atividade_cod', coalesce(e->>'atividade_cod', ''),
-           'tipo',          coalesce(e->>'tipo', ''),
-           'turno',         coalesce(e->>'turno', ''),
-           'qtd_previsto',  e->'qtd_previsto')), '[]'::jsonb)
-    into prog
-  from (select value::jsonb as j from turno_data
-        where key = 'prog_diaria' order by updated_at desc nulls last limit 1) t,
-       jsonb_array_elements(case when jsonb_typeof(t.j) = 'array' then t.j else '[]'::jsonb end) e,
-       lateral (select public.rdo_campo_norm(e->>'encarregado') as enc) n
-  where left(coalesce(e->>'data', ''), 10) = dia
-    and n.enc <> ''
-    and (n.enc = alvo or starts_with(n.enc, alvo) or starts_with(alvo, n.enc));
-
-  with fe as (
-    select value::jsonb as j from turno_data where key = 'funcionario_equipe' limit 1
-  ), linhas as (
-    select btrim(split_part(l, '|', 1)) as mat,
-           btrim(split_part(l, '|', 3)) as funcao,
-           public.rdo_campo_norm(split_part(l, '|', 5)) as enc
-    from fe, regexp_split_to_table(coalesce(fe.j->>'data', ''), E'\n') as l
-    where btrim(l) <> ''
-  ), daequipe as (
-    select distinct on (mat) mat, funcao from linhas
-    where mat <> '' and enc <> ''
-      and (enc = alvo or starts_with(enc, alvo) or starts_with(alvo, enc))
-  )
-  select coalesce(jsonb_agg(jsonb_build_object(
-           'matricula', d.mat,
-           'funcao',    d.funcao,
-           'nome',      coalesce(f.nome, ''))
-         order by f.nome nulls last, d.mat), '[]'::jsonb)
-    into efet
-  from daequipe d
-  left join funcionarios f on f.matricula::text = d.mat;
-
-  return jsonb_build_object('programacao', prog, 'efetivo', efet);
-end
-$$;
+-- Programação do dia e quem trabalha com o encarregado: a função
+-- rdo_campo_contexto fica na seção 10, porque junta a Programação Diária do
+-- sistema Mariuá com a programação feita no Sistema RDO.
 
 revoke all on function public.rdo_campo_equipes()                from public, anon;
-revoke all on function public.rdo_campo_contexto(date, text)     from public, anon;
 grant execute on function public.rdo_campo_equipes()             to authenticated;
-grant execute on function public.rdo_campo_contexto(date, text)  to authenticated;
 grant execute on function public.rdo_campo_norm(text)            to authenticated;
 
 
@@ -494,40 +437,12 @@ begin
 end
 $$;
 
--- 7c. Quem estava programado num dia (para "equipes sem RDO"), com o código
---     da equipe no Cadastro de Equipes quando der para casar pelo encarregado.
-create or replace function public.rdo_campo_programados(p_data date)
-returns jsonb
-language sql stable security definer set search_path = public as $$
-  with prog as (
-    select e from (select value::jsonb as j from turno_data where key = 'prog_diaria'
-                   order by updated_at desc nulls last limit 1) t,
-         jsonb_array_elements(case when jsonb_typeof(t.j) = 'array' then t.j else '[]'::jsonb end) e
-    where left(coalesce(e ->> 'data', ''), 10) = to_char(p_data, 'YYYY-MM-DD')
-  ), enc as (
-    select public.rdo_campo_norm(e ->> 'encarregado') as n, min(e ->> 'encarregado') as nome, count(*) as obras
-    from prog where public.rdo_campo_norm(e ->> 'encarregado') <> '' group by 1
-  ), cad as (
-    select public.rdo_campo_norm(q ->> 'encarregado') as n, btrim(q ->> 'codigo') as codigo
-    from (select case jsonb_typeof(value::jsonb) when 'string' then (value::jsonb #>> '{}')::jsonb else value::jsonb end as j
-          from turno_data where key = 'cadastro_equipes' limit 1) v,
-         jsonb_array_elements(case when jsonb_typeof(v.j -> 'equipes') = 'array' then v.j -> 'equipes' else '[]'::jsonb end) q
-    where btrim(coalesce(q ->> 'encarregado', '')) <> ''
-  )
-  select coalesce(jsonb_agg(jsonb_build_object('encarregado', enc.nome, 'codigo', c.codigo, 'obras', enc.obras)
-                            order by enc.nome), '[]'::jsonb)
-  from enc
-  left join lateral (
-    select cad.codigo from cad
-    where cad.n = enc.n or starts_with(cad.n, enc.n) or starts_with(enc.n, cad.n)
-    order by (cad.n = enc.n) desc limit 1
-  ) c on true
-$$;
-
 revoke all on function public.rdo_campo_salvar_config(jsonb) from public, anon;
-revoke all on function public.rdo_campo_programados(date)    from public, anon;
 grant execute on function public.rdo_campo_salvar_config(jsonb) to authenticated;
-grant execute on function public.rdo_campo_programados(date)    to authenticated;
+
+-- 7c. Quem estava programado num dia (para "equipes sem RDO"): a função
+--     rdo_campo_programados fica na seção 10, porque soma a Programação Diária
+--     do sistema Mariuá com a programação feita no Sistema RDO.
 
 
 -- 8. SISTEMA RDO SEPARADO: QUEM ACESSA A GESTÃO E QUEM LÊ OS DADOS ------------
@@ -649,3 +564,433 @@ $$;
 
 revoke all on function public.rdo_campo_definir_senha(text, text) from public, anon;
 grant execute on function public.rdo_campo_definir_senha(text, text) to authenticated;
+
+
+-- 10. PROGRAMAÇÃO DE OBRAS DIRETO PELO SISTEMA RDO ----------------------------
+-- O escritório programa as obras de cada equipe na gestão (aba Programação),
+-- sem precisar do sistema Mariuá. A Programação Diária do sistema Mariuá
+-- continua valendo: o app recebe as duas juntas, e as duas contam em
+-- "programadas sem RDO". Quem tem acesso à gestão (gestor ou escritório)
+-- programa; o encarregado recebe só o que é da equipe dele.
+create table if not exists public.rdo_programacao (
+  id              uuid primary key default gen_random_uuid(),
+  data            date not null,                 -- dia programado
+  equipe_codigo   text not null,                 -- código do Cadastro de Equipes (ALAN-IRC…)
+  encarregado     text,                          -- do cadastro, na hora de programar
+  pep             text,
+  nome_obra       text,
+  municipio       text,
+  atividade       text,
+  qtd_previsto    numeric,
+  criado_em       timestamptz not null default now(),
+  criado_por      text,
+  atualizado_em   timestamptz not null default now(),
+  atualizado_por  text
+);
+create index if not exists rdo_programacao_data_idx on public.rdo_programacao (data, equipe_codigo);
+alter table public.rdo_programacao enable row level security;
+revoke all on public.rdo_programacao from anon, authenticated;     -- só pelas funções abaixo
+
+-- Dois nomes já normalizados casam quando um começa pelo outro
+-- ("ALAN CONCEICAO" e "ALAN CONCEICAO SANTOS"), como no resto do sistema.
+create or replace function public.rdo_campo_casa(a text, b text)
+returns boolean language sql immutable as $$
+  select coalesce(a, '') <> '' and coalesce(b, '') <> ''
+     and (a = b or starts_with(a, b) or starts_with(b, a))
+$$;
+
+-- Programação Diária do sistema Mariuá (turno_data, chave prog_diaria) de um
+-- dia, na ordem em que está lá. Só as funções abaixo usam: o celular não
+-- baixa a programação inteira.
+create or replace function public.rdo_campo_prog_mariua(p_data date)
+returns table (item jsonb, ordem bigint)
+language sql stable security definer set search_path = public as $$
+  select x.e, x.o
+  from (select value::jsonb as j from turno_data
+        where key = 'prog_diaria' order by updated_at desc nulls last limit 1) t,
+       jsonb_array_elements(case when jsonb_typeof(t.j) = 'array' then t.j else '[]'::jsonb end)
+         with ordinality as x(e, o)
+  where left(coalesce(x.e->>'data', ''), 10) = to_char(p_data, 'YYYY-MM-DD')
+$$;
+
+-- 10a. O que o app baixa: a programação do dia da equipe (as duas origens) e
+--      quem trabalha com o encarregado (chave funcionario_equipe + funcionarios).
+--      A do Sistema RDO casa pelo código da equipe no cadastro ou pelo nome do
+--      encarregado; a do sistema Mariuá, pelo nome do encarregado.
+create or replace function public.rdo_campo_contexto(p_data date, p_encarregado text)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  alvo text := public.rdo_campo_norm(p_encarregado);
+  prog jsonb := '[]'::jsonb;
+  efet jsonb := '[]'::jsonb;
+begin
+  if alvo = '' or p_data is null then
+    return jsonb_build_object('programacao', prog, 'efetivo', efet);
+  end if;
+
+  with cods as (            -- equipes desse encarregado no Cadastro de Equipes
+    select upper(btrim(q->>'codigo')) as codigo
+    from jsonb_array_elements(public.rdo_campo_equipes()) q
+    where public.rdo_campo_casa(public.rdo_campo_norm(q->>'encarregado'), alvo)
+  ), itens as (
+    select 1 as grupo, m.ordem, jsonb_build_object(
+             'id',            m.item->>'id',
+             'pep',           coalesce(m.item->>'pep', ''),
+             'nome_obra',     coalesce(m.item->>'nome_obra', ''),
+             'municipio',     coalesce(m.item->>'municipio', ''),
+             'atividade',     coalesce(m.item->>'atividade', ''),
+             'atividade_cod', coalesce(m.item->>'atividade_cod', ''),
+             'tipo',          coalesce(m.item->>'tipo', ''),
+             'turno',         coalesce(m.item->>'turno', ''),
+             'qtd_previsto',  m.item->'qtd_previsto',
+             'origem',        'mariua') as x
+    from public.rdo_campo_prog_mariua(p_data) m
+    where public.rdo_campo_casa(public.rdo_campo_norm(m.item->>'encarregado'), alvo)
+    union all
+    select 2, row_number() over (order by p.criado_em, p.id), jsonb_build_object(
+             'id',            p.id::text,
+             'pep',           coalesce(p.pep, ''),
+             'nome_obra',     coalesce(p.nome_obra, ''),
+             'municipio',     coalesce(p.municipio, ''),
+             'atividade',     coalesce(p.atividade, ''),
+             'atividade_cod', '',
+             'tipo',          '',
+             'turno',         '',
+             'qtd_previsto',  to_jsonb(p.qtd_previsto),
+             'origem',        'rdo')
+    from rdo_programacao p
+    where p.data = p_data
+      and (upper(btrim(p.equipe_codigo)) in (select codigo from cods)
+           or public.rdo_campo_casa(public.rdo_campo_norm(p.encarregado), alvo))
+  )
+  select coalesce(jsonb_agg(x order by grupo, ordem), '[]'::jsonb) into prog from itens;
+
+  with fe as (
+    select value::jsonb as j from turno_data where key = 'funcionario_equipe' limit 1
+  ), linhas as (
+    select btrim(split_part(l, '|', 1)) as mat,
+           btrim(split_part(l, '|', 3)) as funcao,
+           public.rdo_campo_norm(split_part(l, '|', 5)) as enc
+    from fe, regexp_split_to_table(coalesce(fe.j->>'data', ''), E'\n') as l
+    where btrim(l) <> ''
+  ), daequipe as (
+    select distinct on (mat) mat, funcao from linhas
+    where mat <> '' and enc <> ''
+      and (enc = alvo or starts_with(enc, alvo) or starts_with(alvo, enc))
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'matricula', d.mat,
+           'funcao',    d.funcao,
+           'nome',      coalesce(f.nome, ''))
+         order by f.nome nulls last, d.mat), '[]'::jsonb)
+    into efet
+  from daequipe d
+  left join funcionarios f on f.matricula::text = d.mat;
+
+  return jsonb_build_object('programacao', prog, 'efetivo', efet);
+end
+$$;
+
+-- 10b. Quem estava programado num dia (para "programadas sem RDO"), com o
+--      código da equipe. Soma as duas origens na mesma equipe.
+create or replace function public.rdo_campo_programados(p_data date)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  with cad as (
+    select public.rdo_campo_norm(q->>'encarregado') as n, nullif(btrim(q->>'codigo'), '') as codigo,
+           btrim(q->>'encarregado') as nome
+    from jsonb_array_elements(public.rdo_campo_equipes()) q
+  ), mariua as (            -- Programação Diária do sistema Mariuá, por encarregado
+    select public.rdo_campo_norm(m.item->>'encarregado') as n, min(m.item->>'encarregado') as nome, count(*) as obras
+    from public.rdo_campo_prog_mariua(p_data) m
+    where public.rdo_campo_norm(m.item->>'encarregado') <> ''
+    group by 1
+  ), juntos as (
+    select mariua.nome as encarregado, c.codigo, mariua.obras
+    from mariua
+    left join lateral (
+      select cad.codigo from cad
+      where public.rdo_campo_casa(cad.n, mariua.n)
+      order by (cad.n = mariua.n) desc limit 1
+    ) c on true
+    union all               -- programação feita no Sistema RDO, por equipe
+    select min(p.encarregado), min(btrim(p.equipe_codigo)), count(*)
+    from rdo_programacao p
+    where p.data = p_data
+    group by upper(btrim(p.equipe_codigo))
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('encarregado', coalesce(e.nome, g.encarregado), 'codigo', g.codigo, 'obras', g.obras)
+                            order by coalesce(e.nome, g.encarregado)), '[]'::jsonb)
+  from (
+    select max(encarregado) as encarregado, min(codigo) as codigo, sum(obras)::int as obras
+    from juntos
+    group by coalesce(upper(codigo), 'ENC:' || public.rdo_campo_norm(encarregado))
+  ) g
+  left join lateral (       -- com o código, o nome como está no Cadastro de Equipes
+    select cad.nome from cad where upper(cad.codigo) = upper(g.codigo) limit 1
+  ) e on true
+$$;
+
+-- 10c. O que a gestão mostra na aba Programação: tudo o que está programado
+--      no dia, das duas origens. A do sistema Mariuá vem com o código da
+--      equipe quando o encarregado casa com o cadastro, e só se muda lá.
+create or replace function public.rdo_programacao_dia(p_data date)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  res jsonb;
+begin
+  if public.rdo_campo_meu_acesso() is null then
+    raise exception 'Só quem tem acesso à gestão vê a programação.';
+  end if;
+  if p_data is null then
+    raise exception 'Escolha o dia da programação.';
+  end if;
+
+  with cad as (
+    select public.rdo_campo_norm(q->>'encarregado') as n, nullif(btrim(q->>'codigo'), '') as codigo
+    from jsonb_array_elements(public.rdo_campo_equipes()) q
+  ), itens as (
+    select 1 as grupo, m.ordem, jsonb_build_object(
+             'id',            m.item->>'id',
+             'origem',        'mariua',
+             'data',          p_data,
+             'equipe_codigo', coalesce(c.codigo, ''),
+             'encarregado',   coalesce(m.item->>'encarregado', ''),
+             'pep',           coalesce(m.item->>'pep', ''),
+             'nome_obra',     coalesce(m.item->>'nome_obra', ''),
+             'municipio',     coalesce(m.item->>'municipio', ''),
+             'atividade',     coalesce(m.item->>'atividade', ''),
+             'turno',         coalesce(m.item->>'turno', ''),
+             'qtd_previsto',  m.item->'qtd_previsto') as x
+    from public.rdo_campo_prog_mariua(p_data) m
+    left join lateral (
+      select cad.codigo from cad
+      where public.rdo_campo_casa(cad.n, public.rdo_campo_norm(m.item->>'encarregado'))
+      order by (cad.n = public.rdo_campo_norm(m.item->>'encarregado')) desc limit 1
+    ) c on true
+    union all
+    select 2, row_number() over (order by p.criado_em, p.id), to_jsonb(p) || jsonb_build_object('origem', 'rdo')
+    from rdo_programacao p
+    where p.data = p_data
+  )
+  select coalesce(jsonb_agg(x order by grupo, ordem), '[]'::jsonb) into res from itens;
+  return res;
+end
+$$;
+
+-- 10d. Programar uma obra (sem id) ou mudar uma já programada (com id).
+--      O encarregado vem do Cadastro de Equipes, pelo código da equipe.
+create or replace function public.rdo_programacao_salvar(p_item jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_email text;
+  v_id    uuid;
+  v_data  date;
+  v_tx    text;
+  v_eq    text;
+  v_enc   text;
+  v_qtd   numeric;
+  r       rdo_programacao;
+begin
+  if public.rdo_campo_meu_acesso() is null then
+    raise exception 'Só quem tem acesso à gestão programa obras.';
+  end if;
+  if p_item is null or jsonb_typeof(p_item) <> 'object' then
+    raise exception 'Programação inválida.';
+  end if;
+
+  begin
+    v_data := nullif(btrim(coalesce(p_item->>'data', '')), '')::date;
+  exception when others then
+    raise exception 'Dia inválido. Escolha o dia no calendário.';
+  end;
+  if v_data is null then
+    raise exception 'Escolha o dia da programação.';
+  end if;
+
+  v_tx := btrim(coalesce(p_item->>'equipe_codigo', ''));
+  if v_tx = '' then
+    raise exception 'Escolha a equipe.';
+  end if;
+  select btrim(q->>'codigo'), btrim(q->>'encarregado') into v_eq, v_enc
+  from jsonb_array_elements(public.rdo_campo_equipes()) q
+  where upper(btrim(q->>'codigo')) = upper(v_tx)
+  limit 1;
+  if v_eq is null then
+    raise exception 'A equipe % não está no Cadastro de Equipes. O app só mostra a programação de equipes do cadastro.', v_tx;
+  end if;
+
+  if btrim(coalesce(p_item->>'pep', '')) = '' and btrim(coalesce(p_item->>'nome_obra', '')) = '' then
+    raise exception 'Escreva o PEP ou o nome da obra.';
+  end if;
+
+  begin
+    v_qtd := nullif(replace(btrim(coalesce(p_item->>'qtd_previsto', '')), ',', '.'), '')::numeric;
+  exception when others then
+    raise exception 'Quantidade prevista inválida. Use só números, como 6 ou 320,5.';
+  end;
+  if v_qtd is not null and v_qtd < 0 then
+    raise exception 'A quantidade prevista não pode ser negativa.';
+  end if;
+
+  begin
+    v_id := nullif(btrim(coalesce(p_item->>'id', '')), '')::uuid;
+  exception when others then
+    raise exception 'Só dá para mudar aqui as obras programadas no Sistema RDO. As do sistema Mariuá mudam lá.';
+  end;
+
+  select email into v_email from auth.users where id = auth.uid();
+
+  if v_id is null then
+    insert into rdo_programacao (data, equipe_codigo, encarregado, pep, nome_obra, municipio, atividade,
+                                 qtd_previsto, criado_por, atualizado_por)
+    values (v_data, v_eq, nullif(v_enc, ''),
+            nullif(left(btrim(coalesce(p_item->>'pep', '')), 60), ''),
+            nullif(left(btrim(coalesce(p_item->>'nome_obra', '')), 160), ''),
+            nullif(left(btrim(coalesce(p_item->>'municipio', '')), 80), ''),
+            nullif(left(btrim(coalesce(p_item->>'atividade', '')), 160), ''),
+            v_qtd, v_email, v_email)
+    returning * into r;
+  else
+    update rdo_programacao set
+      data           = v_data,
+      equipe_codigo  = v_eq,
+      encarregado    = nullif(v_enc, ''),
+      pep            = nullif(left(btrim(coalesce(p_item->>'pep', '')), 60), ''),
+      nome_obra      = nullif(left(btrim(coalesce(p_item->>'nome_obra', '')), 160), ''),
+      municipio      = nullif(left(btrim(coalesce(p_item->>'municipio', '')), 80), ''),
+      atividade      = nullif(left(btrim(coalesce(p_item->>'atividade', '')), 160), ''),
+      qtd_previsto   = v_qtd,
+      atualizado_em  = now(),
+      atualizado_por = v_email
+    where id = v_id
+    returning * into r;
+    if not found then
+      raise exception 'Essa obra programada não existe mais. Toque em Atualizar.';
+    end if;
+  end if;
+
+  return to_jsonb(r) || jsonb_build_object('origem', 'rdo');
+end
+$$;
+
+-- 10e. Tirar uma obra da programação. O RDO que já veio dela continua guardado.
+create or replace function public.rdo_programacao_excluir(p_id uuid)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if public.rdo_campo_meu_acesso() is null then
+    raise exception 'Só quem tem acesso à gestão tira obras da programação.';
+  end if;
+  delete from rdo_programacao where id = p_id;
+  if not found then
+    raise exception 'Essa obra programada não existe mais. Toque em Atualizar.';
+  end if;
+end
+$$;
+
+-- 10f. Copiar a programação de um dia para outro (a equipe que continua na
+--      mesma obra). Com p_com_mariua, copia também a Programação Diária do
+--      sistema Mariuá daquele dia, que passa a ser do Sistema RDO. Obra que já
+--      está programada no dia de destino, para a mesma equipe, não se repete.
+create or replace function public.rdo_programacao_copiar(p_de date, p_para date, p_com_mariua boolean default false)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_email      text;
+  v_destino    jsonb;
+  o            record;
+  n_copiadas   integer := 0;
+  n_repetidas  integer := 0;
+  n_sem_equipe integer := 0;
+begin
+  if public.rdo_campo_meu_acesso() is null then
+    raise exception 'Só quem tem acesso à gestão programa obras.';
+  end if;
+  if p_de is null or p_para is null then
+    raise exception 'Escolha os dois dias.';
+  end if;
+  if p_de = p_para then
+    raise exception 'Escolha dois dias diferentes.';
+  end if;
+
+  select email into v_email from auth.users where id = auth.uid();
+
+  -- o que o sistema Mariuá já tem no dia de destino, para não repetir
+  select coalesce(jsonb_agg(m.item), '[]'::jsonb) into v_destino
+  from public.rdo_campo_prog_mariua(p_para) m;
+
+  for o in
+    with cad as (
+      select public.rdo_campo_norm(q->>'encarregado') as n, nullif(btrim(q->>'codigo'), '') as codigo,
+             btrim(q->>'encarregado') as encarregado
+      from jsonb_array_elements(public.rdo_campo_equipes()) q
+    )
+    select p.equipe_codigo, p.encarregado, p.pep, p.nome_obra, p.municipio, p.atividade, p.qtd_previsto,
+           1 as grupo, row_number() over (order by p.criado_em, p.id) as ordem
+    from rdo_programacao p
+    where p.data = p_de
+    union all
+    select c.codigo, coalesce(c.encarregado, m.item->>'encarregado'),
+           nullif(btrim(coalesce(m.item->>'pep', '')), ''),
+           nullif(btrim(coalesce(m.item->>'nome_obra', '')), ''),
+           nullif(btrim(coalesce(m.item->>'municipio', '')), ''),
+           nullif(btrim(coalesce(m.item->>'atividade', '')), ''),
+           case when btrim(coalesce(m.item->>'qtd_previsto', '')) ~ '^-?[0-9]+([.,][0-9]+)?$'
+                then replace(btrim(m.item->>'qtd_previsto'), ',', '.')::numeric end,
+           2, m.ordem
+    from public.rdo_campo_prog_mariua(p_de) m
+    left join lateral (
+      select cad.codigo, cad.encarregado from cad
+      where public.rdo_campo_casa(cad.n, public.rdo_campo_norm(m.item->>'encarregado'))
+      order by (cad.n = public.rdo_campo_norm(m.item->>'encarregado')) desc limit 1
+    ) c on true
+    where coalesce(p_com_mariua, false)
+    order by 8, 9
+  loop
+    if o.equipe_codigo is null or (o.pep is null and o.nome_obra is null) then
+      n_sem_equipe := n_sem_equipe + 1;
+      continue;
+    end if;
+    if exists (select 1 from rdo_programacao x
+               where x.data = p_para
+                 and upper(btrim(x.equipe_codigo)) = upper(btrim(o.equipe_codigo))
+                 and public.rdo_campo_norm(x.pep)       = public.rdo_campo_norm(o.pep)
+                 and public.rdo_campo_norm(x.nome_obra) = public.rdo_campo_norm(o.nome_obra)
+                 and public.rdo_campo_norm(x.atividade) = public.rdo_campo_norm(o.atividade))
+       or exists (select 1 from jsonb_array_elements(v_destino) d
+                  where public.rdo_campo_casa(public.rdo_campo_norm(d->>'encarregado'), public.rdo_campo_norm(o.encarregado))
+                    and public.rdo_campo_norm(d->>'pep')       = public.rdo_campo_norm(o.pep)
+                    and public.rdo_campo_norm(d->>'nome_obra') = public.rdo_campo_norm(o.nome_obra)
+                    and public.rdo_campo_norm(d->>'atividade') = public.rdo_campo_norm(o.atividade)) then
+      n_repetidas := n_repetidas + 1;
+      continue;
+    end if;
+    insert into rdo_programacao (data, equipe_codigo, encarregado, pep, nome_obra, municipio, atividade,
+                                 qtd_previsto, criado_por, atualizado_por)
+    values (p_para, o.equipe_codigo, o.encarregado, o.pep, o.nome_obra, o.municipio, o.atividade,
+            o.qtd_previsto, v_email, v_email);
+    n_copiadas := n_copiadas + 1;
+  end loop;
+
+  return jsonb_build_object('copiadas', n_copiadas, 'repetidas', n_repetidas, 'sem_equipe', n_sem_equipe);
+end
+$$;
+
+revoke all on function public.rdo_campo_prog_mariua(date)                  from public, anon, authenticated;
+revoke all on function public.rdo_campo_contexto(date, text)               from public, anon;
+revoke all on function public.rdo_campo_programados(date)                  from public, anon;
+revoke all on function public.rdo_programacao_dia(date)                    from public, anon;
+revoke all on function public.rdo_programacao_salvar(jsonb)                from public, anon;
+revoke all on function public.rdo_programacao_excluir(uuid)                from public, anon;
+revoke all on function public.rdo_programacao_copiar(date, date, boolean)  from public, anon;
+grant execute on function public.rdo_campo_casa(text, text)                to authenticated;
+grant execute on function public.rdo_campo_contexto(date, text)            to authenticated;
+grant execute on function public.rdo_campo_programados(date)               to authenticated;
+grant execute on function public.rdo_programacao_dia(date)                 to authenticated;
+grant execute on function public.rdo_programacao_salvar(jsonb)             to authenticated;
+grant execute on function public.rdo_programacao_excluir(uuid)             to authenticated;
+grant execute on function public.rdo_programacao_copiar(date, date, boolean) to authenticated;

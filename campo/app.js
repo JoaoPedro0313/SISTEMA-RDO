@@ -19,7 +19,7 @@
     SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxeGVqZm9pYmViY2J0c3F5bWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NjUzMTEsImV4cCI6MjA4NzQ0MTMxMX0.lwf7_EJ6UchEOpzhW3cVKztxDGy78gaQblRvgiEwWh8',
     TABELA: 'rdo_campo',
     BUCKET: 'rdo-fotos',
-    VERSAO: '1.2.5',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
+    VERSAO: '1.2.6',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
     FOTO_LADO: 1600,        // maior lado da foto enviada (px)
     FOTO_QUALIDADE: 0.72,   // JPEG: ~250–450 KB por foto
     MINI_LADO: 320,         // miniatura guardada no celular
@@ -380,23 +380,25 @@
   function chaveCtx(data) { return 'ctx|' + data + '|' + norm(S.equipe && S.equipe.encarregado); }
   function ctxVazio() { return { programacao: [], efetivo: [] }; }
 
+  // Busca no banco agora e guarda no celular. Dá erro se não conseguir.
+  async function buscarContexto(data) {
+    var r = await comPrazo(S.sb.rpc('rdo_campo_contexto', { p_data: data, p_encarregado: S.equipe.encarregado }), 15000);
+    if (r.error) throw r.error;
+    var d = r.data || ctxVazio();
+    d.programacao = Array.isArray(d.programacao) ? d.programacao : [];
+    d.efetivo = Array.isArray(d.efetivo) ? d.efetivo : [];
+    await kvSet(chaveCtx(data), { em: Date.now(), dados: d });
+    return d;
+  }
+
   // Devolve o que estiver guardado e, com internet, busca de novo em segundo plano.
+  // Com forcar, espera a busca nova (se ela falhar, fica o que estava guardado).
   async function contexto(data, aoAtualizar, forcar) {
-    var k = chaveCtx(data);
-    var guardado = await kvGet(k);
+    var guardado = await kvGet(chaveCtx(data));
     var velho = !guardado || (Date.now() - guardado.em > CFG.CTX_VALIDADE);
     if (S.online && S.equipe && S.equipe.encarregado && (velho || forcar)) {
-      var busca = comPrazo(S.sb.rpc('rdo_campo_contexto', { p_data: data, p_encarregado: S.equipe.encarregado }), 15000)
-        .then(function (r) {
-          if (r.error) throw r.error;
-          var d = r.data || ctxVazio();
-          d.programacao = Array.isArray(d.programacao) ? d.programacao : [];
-          d.efetivo = Array.isArray(d.efetivo) ? d.efetivo : [];
-          kvSet(k, { em: Date.now(), dados: d });
-          if (aoAtualizar) aoAtualizar(d);
-          return d;
-        });
-      if (!guardado) return busca.catch(function () { return ctxVazio(); });
+      var busca = buscarContexto(data).then(function (d) { if (aoAtualizar) aoAtualizar(d); return d; });
+      if (!guardado || forcar) return busca.catch(function () { return guardado ? guardado.dados : ctxVazio(); });
       busca.catch(function () {});
     }
     return guardado ? guardado.dados : ctxVazio();
@@ -768,19 +770,61 @@
 
     var desenharProg = function (ctx) {
       if (S.tela !== 'inicio') return;
+      var todas = ctx.programacao || [];
       var usados = deHoje.map(function (r) { return r.obra && r.obra.prog_id; }).filter(Boolean);
-      var livres = (ctx.programacao || []).filter(function (p) { return usados.indexOf(p.id) < 0; });
-      $('ini-prog-bloco').hidden = !livres.length;
-      $('ini-prog').innerHTML = livres.map(function (p) {
+      var livres = todas.filter(function (p) { return usados.indexOf(p.id) < 0; });
+      var novas = S.progNovas && S.progNovas.ate > Date.now() ? S.progNovas.ids : [];
+      $('ini-prog-bloco').hidden = false;
+      $('ini-prog').innerHTML = livres.length ? livres.map(function (p) {
         var tit = [p.pep, p.nome_obra].filter(Boolean).join(', ') || 'Obra programada';
         var det = [p.atividade, p.municipio].filter(Boolean).join(', ');
-        return '<li><button type="button" class="linha" data-prog="' + esc(p.id) + '">' +
-          '<span class="linha-tx"><b>' + esc(tit) + '</b><span>' + esc(det) + '</span></span>' +
+        var nova = novas.indexOf(String(p.id)) >= 0;
+        return '<li' + (nova ? ' class="nova"' : '') + '><button type="button" class="linha" data-prog="' + esc(p.id) + '">' +
+          '<span class="linha-tx"><b>' + esc(tit) + '</b><span>' + (nova ? '<span class="etq-nova">Nova</span>' : '') + esc(det) + '</span></span>' +
           '<span class="linha-acao">Começar RDO</span></button></li>';
-      }).join('');
+      }).join('') : '<li class="linha-vazia">' + (todas.length ? 'As obras programadas para hoje já têm RDO.'
+        : 'Nenhuma obra programada para hoje. Se o escritório acabou de programar, toque em Sincronizar.') + '</li>';
       S.ctxHoje = ctx;
+      renderQuandoProg(hoje);
     };
     desenharProg(await contexto(hoje, desenharProg));
+  }
+
+  // Quando a programação do dia foi baixada pela última vez.
+  async function renderQuandoProg(data) {
+    var g = await kvGet(chaveCtx(data)), el = $('ini-prog-quando');
+    if (!el || S.tela !== 'inicio') return;
+    var d = g && new Date(g.em), hora = d ? p2(d.getHours()) + ':' + p2(d.getMinutes()) : '';
+    el.textContent = !g ? (S.online ? 'Buscando a programação do escritório…' : 'Sem internet. A programação aparece quando o celular pegar sinal.')
+      : S.online ? 'Sincronizada às ' + hora + '.' : 'Sem internet. Mostrando a programação sincronizada às ' + hora + '.';
+  }
+
+  // Botão Sincronizar: busca a programação agora e diz o que chegou.
+  // Aproveita o sinal para mandar os RDOs da fila.
+  async function sincronizarProgramacao() {
+    var bt = $('ini-sinc');
+    if (!bt || bt.getAttribute('aria-busy') === 'true' || !S.equipe) return;
+    if (!S.online || !navigator.onLine) { aviso('Sem internet agora. Toque em Sincronizar quando o celular pegar sinal.'); return; }
+    var antes = ((S.ctxHoje && S.ctxHoje.programacao) || []).map(function (p) { return String(p.id); });
+    bt.setAttribute('aria-busy', 'true'); bt.disabled = true; $('ini-sinc-tx').textContent = 'Sincronizando…';
+    try {
+      var d = await buscarContexto(hojeISO());
+      var ids = d.programacao.map(function (p) { return String(p.id); });
+      var novas = ids.filter(function (id) { return antes.indexOf(id) < 0; });
+      var sairam = antes.filter(function (id) { return ids.indexOf(id) < 0; });
+      S.progNovas = { ids: novas, ate: Date.now() + 10 * 60 * 1000 };
+      if (novas.length) aviso(novas.length === 1 ? 'Chegou 1 obra nova na programação.' : 'Chegaram ' + novas.length + ' obras novas na programação.', 'ok');
+      else if (sairam.length) aviso('Programação atualizada: ' + (sairam.length === 1 ? '1 obra saiu.' : sairam.length + ' obras saíram.'));
+      else aviso('Programação em dia. Nenhuma obra nova.');
+      sincronizar();
+      atualizarDoEscritorio(false);
+    } catch (e) {
+      aviso(tipoErro(e) === 'rede' ? 'O sinal caiu. Tente de novo quando a internet melhorar.'
+        : mensagemErro(e, 'Não deu para sincronizar a programação.'), 'erro', 6000);
+    } finally {
+      bt.removeAttribute('aria-busy'); bt.disabled = false; $('ini-sinc-tx').textContent = 'Sincronizar';
+      if (S.tela === 'inicio') abrirInicioSuave();
+    }
   }
 
   function renderAvisoInicio(rdos) {
@@ -1472,7 +1516,7 @@
         if (!S.online) { aviso('Sem internet agora.'); return; }
         try {
           await baixarEquipes();
-          await contexto(hojeISO(), null, true);
+          if (S.equipe && S.equipe.encarregado) await buscarContexto(hojeISO());
           await carregarCatalogo(true);
           aviso('Equipes, programação e lista de serviços atualizadas.', 'ok');
           if (S.tela === 'inicio') abrirInicio();
@@ -1534,6 +1578,7 @@
     // início
     $('ini-novo').addEventListener('click', function () { novoRdo(null); });
     $('ini-ajustes').addEventListener('click', abrirAjustes);
+    $('ini-sinc').addEventListener('click', sincronizarProgramacao);
     $('tela-inicio').addEventListener('click', function (e) {
       var a = e.target.closest('[data-ir]'); if (a) { ir(a.dataset.ir); return; }
       var p = e.target.closest('[data-prog]');
@@ -1681,8 +1726,11 @@
 
     // rede, foco e navegação
     window.addEventListener('popstate', rota);
-    window.addEventListener('online', function () { S.online = true; S.atrasoSync = 15000; atualizarSelo(); sincronizar(); atualizarDoEscritorio(true); buscarAtualizacao(false); });
-    window.addEventListener('offline', function () { S.online = false; atualizarSelo(); });
+    window.addEventListener('online', function () {
+      S.online = true; S.atrasoSync = 15000; atualizarSelo(); sincronizar(); atualizarDoEscritorio(true); buscarAtualizacao(false);
+      if (S.tela === 'inicio') renderQuandoProg(hojeISO());
+    });
+    window.addEventListener('offline', function () { S.online = false; atualizarSelo(); if (S.tela === 'inicio') renderQuandoProg(hojeISO()); });
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible') {
         sincronizar();
