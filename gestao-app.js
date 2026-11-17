@@ -13,7 +13,7 @@
 (function () {
   'use strict';
 
-  var VERSAO_APP = '1.2.7';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
+  var VERSAO_APP = '1.2.8';   // reserva: a versão publicada é lida do campo/sw.js ao abrir a página
   var MOTIVOS_PADRAO = ['Chuva', 'Falta de material', 'Desligamento não liberado', 'Interferência de terceiros',
     'Veículo ou equipamento', 'Acidente ou incidente', 'Outro'];
   var CLIMA = { bom: 'Bom', nublado: 'Nublado', chuva: 'Chuva', impraticavel: 'Impraticável' };
@@ -313,7 +313,7 @@
     var ref = versaoReferencia();
     var velhos = cels.filter(function (a) { return a.versao_app && cmpVersao(a.versao_app, ref) < 0; });
     if (velhos.length) h += alerta('av', 'refresh-alert', '<b>' + velhos.length + (velhos.length === 1 ? ' celular' : ' celulares') + '</b> com versão do app anterior à ' + esc(ref) + '. A atualização chega ao abrir o app com internet.', { id: 'ver-cel', t: 'Ver celulares' });
-    if (G.catalogo && !G.catalogo.n && !G.erros.catalogo) h += alerta('info', 'list-details', 'A lista de serviços ainda não foi importada. Sem ela, o encarregado aponta escrevendo o serviço.', { id: 'catalogo', t: 'Importar lista' });
+    if (G.catalogo && !G.catalogo.n && !G.erros.catalogo) h += alerta('info', 'list-details', 'A lista de serviços ainda não foi importada no sistema. Até lá, o app usa a lista que vem dentro dele (contrato OBRAS - BA). Importe a precificação para atualizar os celulares.', { id: 'catalogo', t: 'Importar lista' });
     box.innerHTML = h || vazio('Nada para conferir ' + textoPeriodo() + '.');
   }
 
@@ -461,7 +461,7 @@
     if (G.erros.config) $('ga-cfg-quem').textContent = erroBanco(G.erros.config, 'as configurações do app');
     var cat = G.catalogo;
     $('ga-cat-status').textContent = G.erros.catalogo ? erroBanco(G.erros.catalogo, 'a lista de serviços')
-      : cat && cat.n ? cat.n + ' serviços em uso no app, importados em ' + quando(cat.em) + '.' : 'A lista de serviços ainda não foi importada.';
+      : cat && cat.n ? cat.n + ' serviços em uso no app, importados em ' + quando(cat.em) + '.' : 'A lista de serviços ainda não foi importada. Até lá, o app usa a lista que vem dentro dele (contrato OBRAS - BA, também sem internet).';
   }
 
   async function salvarConfig(ev) {

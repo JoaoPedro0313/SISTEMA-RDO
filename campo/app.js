@@ -19,7 +19,7 @@
     SUPA_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxeGVqZm9pYmViY2J0c3F5bWppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NjUzMTEsImV4cCI6MjA4NzQ0MTMxMX0.lwf7_EJ6UchEOpzhW3cVKztxDGy78gaQblRvgiEwWh8',
     TABELA: 'rdo_campo',
     BUCKET: 'rdo-fotos',
-    VERSAO: '1.2.7',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
+    VERSAO: '1.2.8',      // só reserva: a versão que vale é a do sw.js (o app pergunta a ele)
     FOTO_LADO: 1600,        // maior lado da foto enviada (px)
     FOTO_QUALIDADE: 0.72,   // JPEG: ~250–450 KB por foto
     MINI_LADO: 320,         // miniatura guardada no celular
@@ -406,8 +406,11 @@
 
   // ─── LISTA DE SERVIÇOS (precificação) ────────────────────────────────────
   // A mesma lista do sistema da concessionária, importada pelo escritório na
-  // tela RDO. Fica guardada no celular: o apontamento funciona sem internet.
-  var CAT = { itens: [], porCod: {}, em: 0, lido: false, erro: '' };
+  // gestão. Fica guardada no celular: o apontamento funciona sem internet.
+  // Enquanto o celular não tem a lista do sistema, vale a que vem dentro do app
+  // (servicos-padrao.js, guardado junto com o app): nunca fica sem lista.
+  // origem: 'banco' (lista do sistema), 'app' (a que vem no app) ou ''.
+  var CAT = { itens: [], porCod: {}, em: 0, lido: false, erro: '', origem: '', tentouEm: 0, vazioNoBanco: false };
 
   function nomeGrupo(g) { return GRUPO_NOME[g] || (g ? g.charAt(0) + g.slice(1).toLowerCase() : 'Outros'); }
   function unidadeTx(u) {
@@ -427,22 +430,39 @@
     CAT.em = em || 0;
   }
 
-  // Baixa de novo quando passou mais de uma hora (são ~40 KB) ou quando pedem.
+  function listaDoApp() {
+    var p = window.RDO_SERVICOS_PADRAO;
+    if (!p || !Array.isArray(p.itens)) return [];
+    return p.itens.map(function (x) { return { c: x[0], d: x[1], u: x[2], k: x[3], g: x[4], ct: p.contrato || '' }; });
+  }
+  function usarListaDoApp() {
+    prepararCatalogo(listaDoApp(), 0);
+    CAT.origem = CAT.itens.length ? 'app' : '';
+  }
+
+  // A lista do sistema é baixada de novo depois de uma hora (são ~40 KB) ou
+  // quando pedem. Com a lista do app, confere o sistema a cada 5 minutos.
   async function carregarCatalogo(forcar) {
     if (!CAT.lido) {
       CAT.lido = true;
       var g = await kvGet('servicos');
-      if (g && Array.isArray(g.itens)) prepararCatalogo(g.itens, g.em);
+      if (g && Array.isArray(g.itens) && g.itens.length) { prepararCatalogo(g.itens, g.em); CAT.origem = 'banco'; }
+      else usarListaDoApp();
     }
-    var velho = !CAT.em || Date.now() - CAT.em > 60 * 60 * 1000;
+    var velho = CAT.origem === 'banco' ? (!CAT.em || Date.now() - CAT.em > 60 * 60 * 1000)
+      : Date.now() - CAT.tentouEm > 5 * 60 * 1000;
     if (S.online && S.sb && S.conta && (velho || forcar)) {
+      CAT.tentouEm = Date.now();
       try {
         var r = await comPrazo(S.sb.rpc('rdo_campo_servicos'), 20000);
         if (r.error) throw r.error;
         var itens = (Array.isArray(r.data) ? r.data : []).filter(function (x) { return x && x.c && x.d; });
-        prepararCatalogo(itens, itens.length ? Date.now() : 0);     // lista vazia: tenta de novo na próxima
+        CAT.vazioNoBanco = !itens.length;
+        if (itens.length) {                               // a lista do sistema passa na frente
+          prepararCatalogo(itens, Date.now()); CAT.origem = 'banco';
+          await kvSet('servicos', { em: CAT.em, itens: itens });
+        } else if (!CAT.itens.length) usarListaDoApp();  // sistema sem lista: fica a do app
         CAT.erro = '';
-        await kvSet('servicos', { em: CAT.em, itens: itens });
       } catch (e) {
         CAT.erro = mensagemErro(e, 'Não deu para baixar a lista de serviços.');
         if (forcar) throw e;
@@ -531,7 +551,8 @@
 
   async function abrirSeletorServico() {
     var r = S.rdo; if (!r) return;
-    await carregarCatalogo();
+    if (CAT.lido && CAT.itens.length) carregarCatalogo().catch(function () {});
+    else await carregarCatalogo();
     var lista = catalogoDaEquipe();
     PICK.grupo = '';
     $('dlg-serv-busca').value = '';
@@ -806,7 +827,7 @@
     if (!bt || bt.getAttribute('aria-busy') === 'true' || !S.equipe) return;
     if (!S.online || !navigator.onLine) { aviso('Sem internet agora. Toque em Sincronizar quando o celular pegar sinal.'); return; }
     var antes = ((S.ctxHoje && S.ctxHoje.programacao) || []).map(function (p) { return String(p.id); });
-    var servAntes = CAT.itens.length;
+    var servAntes = CAT.itens.length, origemAntes = CAT.origem;
     bt.setAttribute('aria-busy', 'true'); bt.disabled = true; $('ini-sinc-tx').textContent = 'Sincronizando…';
     try {
       var d = await buscarContexto(hojeISO());
@@ -819,11 +840,11 @@
       var tx = novas.length ? (novas.length === 1 ? 'Chegou 1 obra nova na programação.' : 'Chegaram ' + novas.length + ' obras novas na programação.')
         : sairam.length ? 'Programação atualizada: ' + (sairam.length === 1 ? '1 obra saiu.' : sairam.length + ' obras saíram.')
         : 'Programação em dia. Nenhuma obra nova.';
-      var n = CAT.itens.length;
-      if (!servOk) tx += ' A lista de serviços não baixou agora; tente de novo.';
+      var n = CAT.itens.length, mudou = CAT.origem === 'banco' && (origemAntes !== 'banco' || n !== servAntes);
+      if (!servOk) tx += n ? '' : ' A lista de serviços não baixou agora; tente de novo.';
       else if (!n) tx += ' A lista de serviços ainda está vazia no sistema: peça ao escritório para importar a precificação.';
-      else if (n !== servAntes) tx += ' Lista de serviços atualizada: ' + n + ' serviços.';
-      aviso(tx, novas.length || (servOk && n && n !== servAntes) ? 'ok' : (servOk && !n ? 'erro' : ''), 6000);
+      else if (mudou) tx += ' Lista de serviços atualizada pelo escritório: ' + n + ' serviços.';
+      aviso(tx, novas.length || mudou ? 'ok' : (servOk && !n ? 'erro' : ''), 6000);
       sincronizar();
       carregarConfig().catch(function () {});
       informarAparelho(true);
@@ -1515,7 +1536,7 @@
       '<dt>Usuário</dt><dd>' + esc(usuarioDaConta(S.conta)) + '</dd>' +
       '<dt>Equipe</dt><dd>' + esc(S.equipe ? S.equipe.codigo : '') + '</dd>' +
       '<dt>Na fila</dt><dd>' + fila + '</dd>' +
-      '<dt>Serviços</dt><dd>' + (CAT.itens.length ? CAT.itens.length + (CAT.em ? ' (lista de ' + quandoBR(CAT.em) + ')' : '') : 'lista não baixada') + '</dd>' +
+      '<dt>Serviços</dt><dd>' + (CAT.itens.length ? CAT.itens.length + (CAT.origem === 'app' ? ' (lista que vem no app)' : CAT.em ? ' (lista de ' + quandoBR(CAT.em) + ')' : '') : 'lista não baixada') + '</dd>' +
       '<dt>Versão</dt><dd>' + esc(versaoAtual()) + (ATU.nova ? ' <span class="etq pendente">nova ' + esc((ATU.info && ATU.info.versao) || '') + ' pronta</span>' : '') + '</dd>';
     var d = $('dlg-ajustes'); d.returnValue = '';
     d.onclose = async function () {

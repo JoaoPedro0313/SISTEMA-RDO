@@ -495,7 +495,7 @@
   }
   function statusCatalogo() {
     var ativos = CATS.linhas.filter(function (x) { return x.ativo; });
-    if (!ativos.length) return 'Nenhuma lista importada ainda. Enquanto isso, o encarregado aponta escrevendo o serviço.';
+    if (!ativos.length) return 'Nenhuma lista importada ainda. Enquanto isso, o app usa a lista que vem dentro dele (contrato OBRAS - BA). Importe a precificação para atualizar os celulares.';
     var porCt = {}; ativos.forEach(function (x) { porCt[x.contrato] = (porCt[x.contrato] || 0) + 1; });
     var ult = ativos.reduce(function (a, b) { return (b.atualizado_em || '') > (a.atualizado_em || '') ? b : a; });
     return Object.keys(porCt).map(function (ct) { return porCt[ct] + ' serviços em uso no contrato ' + ct; }).join('; ') +
