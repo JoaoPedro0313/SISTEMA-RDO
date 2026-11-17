@@ -17,6 +17,7 @@
 --   9. senha nova definida pelo gestor (aba Usuários);
 --  10. a programação de obras feita direto no Sistema RDO (aba Programação),
 --      que o app recebe junto com a Programação Diária do sistema Mariuá.
+--  No fim, em Results, tem de aparecer "Tudo certo".
 --
 --  O app NÃO grava no turno_data. O site lê esta tabela (rdo-app.js no rdo.html).
 -- ============================================================================
@@ -994,3 +995,19 @@ grant execute on function public.rdo_programacao_dia(date)                 to au
 grant execute on function public.rdo_programacao_salvar(jsonb)             to authenticated;
 grant execute on function public.rdo_programacao_excluir(uuid)             to authenticated;
 grant execute on function public.rdo_programacao_copiar(date, date, boolean) to authenticated;
+
+
+-- 11. FIM ----------------------------------------------------------------------
+-- Avisa a API do Supabase que há funções novas (sem isso, a gestão pode dizer
+-- por alguns minutos que o banco "ainda não tem" a programação) e mostra o
+-- resultado: tem de aparecer "Tudo certo" embaixo, em Results.
+notify pgrst, 'reload schema';
+
+select case
+         when to_regclass('public.rdo_programacao') is not null
+          and to_regprocedure('public.rdo_programacao_dia(date)') is not null
+          and to_regprocedure('public.rdo_programacao_salvar(jsonb)') is not null
+          and to_regprocedure('public.rdo_campo_contexto(date, text)') is not null
+         then 'Tudo certo: banco do Sistema RDO atualizado, com a programação de obras. Volte à gestão e toque em Atualizar.'
+         else 'Faltou alguma parte. Rode o arquivo inteiro de novo e veja se aparece algum erro em vermelho.'
+       end as resultado;

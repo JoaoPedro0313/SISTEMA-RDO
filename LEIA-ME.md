@@ -8,7 +8,7 @@ O `index.html`, o `gestao.css` e o `gestao-app.js` são a gestão, e o `modo.js`
 
 ## Como colocar no ar
 
-Primeiro, no Supabase, abra SQL Editor → New query, cole o `rdo_campo.sql` inteiro e clique em Run; pode rodar de novo sem perder nada. Quem já tinha rodado uma versão anterior roda o arquivo atualizado do mesmo jeito, e ganha a programação de obras pelo Sistema RDO (seção 10 do arquivo). Depois, no GitHub, em Settings → Pages, escolha "Deploy from a branch", o ramo `main` e a pasta `/ (root)`, e salve: em um ou dois minutos os dois endereços ficam no ar.
+Primeiro, no Supabase, abra SQL Editor → New query, cole o `rdo_campo.sql` inteiro e clique em Run; pode rodar de novo sem perder nada. Quem já tinha rodado uma versão anterior roda o arquivo atualizado do mesmo jeito, e ganha a programação de obras pelo Sistema RDO (seção 10 do arquivo). No fim, embaixo, em Results, tem de aparecer "Tudo certo: banco do Sistema RDO atualizado". Se o Supabase avisar que a consulta tem operações destrutivas, pode confirmar: são só as regras de acesso sendo apagadas e criadas de novo, e nenhum dado é apagado. Se a gestão disser "O banco ainda não tem a programação do Sistema RDO", é porque o arquivo atualizado ainda não foi rodado até o fim nesse banco: rode de novo, confira o "Tudo certo" e toque em Atualizar na gestão. Depois, no GitHub, em Settings → Pages, escolha "Deploy from a branch", o ramo `main` e a pasta `/ (root)`, e salve: em um ou dois minutos os dois endereços ficam no ar.
 
 Para o "Esqueci a senha" voltar para o Sistema RDO, no Supabase, em Authentication → URL Configuration → Redirect URLs, acrescente `https://joaopedro0313.github.io/SISTEMA-RDO/**`. Sem isso, o link de senha nova continua indo para o site do sistema Mariuá, que também funciona.
 

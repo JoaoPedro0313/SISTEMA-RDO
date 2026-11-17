@@ -789,11 +789,18 @@
   }
   function obraTx(p) { return [p.pep, p.nome_obra].filter(Boolean).join(', ') || 'Obra sem nome'; }
   function casaNome(a, b) { a = norm(a); b = norm(b); return !!a && !!b && (a === b || a.indexOf(b) === 0 || b.indexOf(a) === 0); }
+  // Diz o que falta de verdade. Erro de permissão ou outro erro do banco aparece
+  // como veio (com o código), para não mandar rodar o SQL à toa.
   function erroProg(e) {
-    var m = String((e && (e.message || e.error)) || e || '');
-    if (/rdo_programacao|could not find|schema cache/i.test(m)) return 'O banco ainda não tem a programação do Sistema RDO. Rode o rdo_campo.sql atualizado no Supabase (SQL Editor → Run).';
-    if (/fetch|network|load failed/i.test(m)) return 'Sem conexão com o banco. Tente de novo quando a internet voltar.';
-    return m;
+    var m = String((e && (e.message || e.error)) || e || ''), cod = String((e && e.code) || '');
+    var falta = (m.match(/function (?:public\.)?(rdo_[a-z_]+)/i) || [])[1] || '';
+    if (cod === 'PGRST202' || /could not find the function/i.test(m))
+      return 'O banco ainda não tem a programação do Sistema RDO' + (falta ? ' (falta a função ' + falta + ')' : '') +
+        '. Rode o rdo_campo.sql atualizado no Supabase (SQL Editor → Run) até aparecer "Tudo certo" no resultado, e depois toque em Atualizar.';
+    if (cod === 'PGRST205' || /relation .*rdo_programacao.* does not exist/i.test(m))
+      return 'O banco ainda não tem a tabela da programação. Rode o rdo_campo.sql atualizado no Supabase (SQL Editor → Run) e depois toque em Atualizar.';
+    if (/failed to fetch|network|load failed/i.test(m)) return 'Sem conexão com o banco. Tente de novo quando a internet voltar.';
+    return m + (cod && cod !== 'P0001' ? ' (código ' + cod + ')' : '');
   }
   // Obras, atividades e municípios já usados, para sugerir no formulário.
   function lembrarObras(itens) {
