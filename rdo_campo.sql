@@ -573,7 +573,18 @@ grant execute on function public.rdo_campo_definir_senha(text, text) to authenti
 -- continua valendo: o app recebe as duas juntas, e as duas contam em
 -- "programadas sem RDO". Quem tem acesso à gestão (gestor ou escritório)
 -- programa; o encarregado recebe só o que é da equipe dele.
-create table if not exists public.rdo_programacao (
+-- Os nomes começam com rdo_campo_, como tudo do Sistema RDO, para não
+-- esbarrar em tabelas e funções do sistema Mariuá.
+do $$
+begin
+  if to_regclass('public.rdo_campo_programacao') is not null and not exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'rdo_campo_programacao' and column_name = 'equipe_codigo') then
+    raise exception 'Já existe neste banco uma tabela rdo_campo_programacao com outro formato. Nada foi mudado: avise quem cuida do sistema.';
+  end if;
+end $$;
+
+create table if not exists public.rdo_campo_programacao (
   id              uuid primary key default gen_random_uuid(),
   data            date not null,                 -- dia programado
   equipe_codigo   text not null,                 -- código do Cadastro de Equipes (ALAN-IRC…)
@@ -588,9 +599,31 @@ create table if not exists public.rdo_programacao (
   atualizado_em   timestamptz not null default now(),
   atualizado_por  text
 );
-create index if not exists rdo_programacao_data_idx on public.rdo_programacao (data, equipe_codigo);
-alter table public.rdo_programacao enable row level security;
-revoke all on public.rdo_programacao from anon, authenticated;     -- só pelas funções abaixo
+create index if not exists rdo_campo_programacao_data_idx on public.rdo_campo_programacao (data, equipe_codigo);
+
+-- Quem rodou a versão anterior deste arquivo tem a tabela com o nome antigo
+-- (rdo_programacao): traz o que já foi programado nela. Só mexe se ela tiver
+-- exatamente as colunas daquela versão; uma tabela do sistema Mariuá com o
+-- mesmo nome fica como está.
+do $$
+begin
+  if to_regclass('public.rdo_programacao') is not null
+     and (select count(*) from information_schema.columns
+          where table_schema = 'public' and table_name = 'rdo_programacao'
+            and column_name in ('id', 'data', 'equipe_codigo', 'encarregado', 'pep', 'nome_obra', 'municipio',
+                                'atividade', 'qtd_previsto', 'criado_em', 'criado_por', 'atualizado_em', 'atualizado_por')) = 13
+     and exists (select 1 from information_schema.columns
+                 where table_schema = 'public' and table_name = 'rdo_programacao' and column_name = 'id' and data_type = 'uuid') then
+    execute 'insert into public.rdo_campo_programacao (id, data, equipe_codigo, encarregado, pep, nome_obra, municipio, atividade,
+                                                         qtd_previsto, criado_em, criado_por, atualizado_em, atualizado_por)
+             select id, data, equipe_codigo, encarregado, pep, nome_obra, municipio, atividade,
+                    qtd_previsto, criado_em, criado_por, atualizado_em, atualizado_por
+             from public.rdo_programacao
+             on conflict (id) do nothing';
+  end if;
+end $$;
+alter table public.rdo_campo_programacao enable row level security;
+revoke all on public.rdo_campo_programacao from anon, authenticated;     -- só pelas funções abaixo
 
 -- Dois nomes já normalizados casam quando um começa pelo outro
 -- ("ALAN CONCEICAO" e "ALAN CONCEICAO SANTOS"), como no resto do sistema.
@@ -660,7 +693,7 @@ begin
              'turno',         '',
              'qtd_previsto',  to_jsonb(p.qtd_previsto),
              'origem',        'rdo')
-    from rdo_programacao p
+    from rdo_campo_programacao p
     where p.data = p_data
       and (upper(btrim(p.equipe_codigo)) in (select codigo from cods)
            or public.rdo_campo_casa(public.rdo_campo_norm(p.encarregado), alvo))
@@ -717,7 +750,7 @@ language sql stable security definer set search_path = public as $$
     ) c on true
     union all               -- programação feita no Sistema RDO, por equipe
     select min(p.encarregado), min(btrim(p.equipe_codigo)), count(*)
-    from rdo_programacao p
+    from rdo_campo_programacao p
     where p.data = p_data
     group by upper(btrim(p.equipe_codigo))
   )
@@ -736,7 +769,7 @@ $$;
 -- 10c. O que a gestão mostra na aba Programação: tudo o que está programado
 --      no dia, das duas origens. A do sistema Mariuá vem com o código da
 --      equipe quando o encarregado casa com o cadastro, e só se muda lá.
-create or replace function public.rdo_programacao_dia(p_data date)
+create or replace function public.rdo_campo_prog_dia(p_data date)
 returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare
@@ -773,7 +806,7 @@ begin
     ) c on true
     union all
     select 2, row_number() over (order by p.criado_em, p.id), to_jsonb(p) || jsonb_build_object('origem', 'rdo')
-    from rdo_programacao p
+    from rdo_campo_programacao p
     where p.data = p_data
   )
   select coalesce(jsonb_agg(x order by grupo, ordem), '[]'::jsonb) into res from itens;
@@ -783,7 +816,7 @@ $$;
 
 -- 10d. Programar uma obra (sem id) ou mudar uma já programada (com id).
 --      O encarregado vem do Cadastro de Equipes, pelo código da equipe.
-create or replace function public.rdo_programacao_salvar(p_item jsonb)
+create or replace function public.rdo_campo_prog_salvar(p_item jsonb)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -794,7 +827,7 @@ declare
   v_eq    text;
   v_enc   text;
   v_qtd   numeric;
-  r       rdo_programacao;
+  r       rdo_campo_programacao;
 begin
   if public.rdo_campo_meu_acesso() is null then
     raise exception 'Só quem tem acesso à gestão programa obras.';
@@ -846,7 +879,7 @@ begin
   select email into v_email from auth.users where id = auth.uid();
 
   if v_id is null then
-    insert into rdo_programacao (data, equipe_codigo, encarregado, pep, nome_obra, municipio, atividade,
+    insert into rdo_campo_programacao (data, equipe_codigo, encarregado, pep, nome_obra, municipio, atividade,
                                  qtd_previsto, criado_por, atualizado_por)
     values (v_data, v_eq, nullif(v_enc, ''),
             nullif(left(btrim(coalesce(p_item->>'pep', '')), 60), ''),
@@ -856,7 +889,7 @@ begin
             v_qtd, v_email, v_email)
     returning * into r;
   else
-    update rdo_programacao set
+    update rdo_campo_programacao set
       data           = v_data,
       equipe_codigo  = v_eq,
       encarregado    = nullif(v_enc, ''),
@@ -879,14 +912,14 @@ end
 $$;
 
 -- 10e. Tirar uma obra da programação. O RDO que já veio dela continua guardado.
-create or replace function public.rdo_programacao_excluir(p_id uuid)
+create or replace function public.rdo_campo_prog_excluir(p_id uuid)
 returns void
 language plpgsql security definer set search_path = public as $$
 begin
   if public.rdo_campo_meu_acesso() is null then
     raise exception 'Só quem tem acesso à gestão tira obras da programação.';
   end if;
-  delete from rdo_programacao where id = p_id;
+  delete from rdo_campo_programacao where id = p_id;
   if not found then
     raise exception 'Essa obra programada não existe mais. Toque em Atualizar.';
   end if;
@@ -897,7 +930,7 @@ $$;
 --      mesma obra). Com p_com_mariua, copia também a Programação Diária do
 --      sistema Mariuá daquele dia, que passa a ser do Sistema RDO. Obra que já
 --      está programada no dia de destino, para a mesma equipe, não se repete.
-create or replace function public.rdo_programacao_copiar(p_de date, p_para date, p_com_mariua boolean default false)
+create or replace function public.rdo_campo_prog_copiar(p_de date, p_para date, p_com_mariua boolean default false)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -932,7 +965,7 @@ begin
     )
     select p.equipe_codigo, p.encarregado, p.pep, p.nome_obra, p.municipio, p.atividade, p.qtd_previsto,
            1 as grupo, row_number() over (order by p.criado_em, p.id) as ordem
-    from rdo_programacao p
+    from rdo_campo_programacao p
     where p.data = p_de
     union all
     select c.codigo, coalesce(c.encarregado, m.item->>'encarregado'),
@@ -956,7 +989,7 @@ begin
       n_sem_equipe := n_sem_equipe + 1;
       continue;
     end if;
-    if exists (select 1 from rdo_programacao x
+    if exists (select 1 from rdo_campo_programacao x
                where x.data = p_para
                  and upper(btrim(x.equipe_codigo)) = upper(btrim(o.equipe_codigo))
                  and public.rdo_campo_norm(x.pep)       = public.rdo_campo_norm(o.pep)
@@ -970,7 +1003,7 @@ begin
       n_repetidas := n_repetidas + 1;
       continue;
     end if;
-    insert into rdo_programacao (data, equipe_codigo, encarregado, pep, nome_obra, municipio, atividade,
+    insert into rdo_campo_programacao (data, equipe_codigo, encarregado, pep, nome_obra, municipio, atividade,
                                  qtd_previsto, criado_por, atualizado_por)
     values (p_para, o.equipe_codigo, o.encarregado, o.pep, o.nome_obra, o.municipio, o.atividade,
             o.qtd_previsto, v_email, v_email);
@@ -984,17 +1017,17 @@ $$;
 revoke all on function public.rdo_campo_prog_mariua(date)                  from public, anon, authenticated;
 revoke all on function public.rdo_campo_contexto(date, text)               from public, anon;
 revoke all on function public.rdo_campo_programados(date)                  from public, anon;
-revoke all on function public.rdo_programacao_dia(date)                    from public, anon;
-revoke all on function public.rdo_programacao_salvar(jsonb)                from public, anon;
-revoke all on function public.rdo_programacao_excluir(uuid)                from public, anon;
-revoke all on function public.rdo_programacao_copiar(date, date, boolean)  from public, anon;
+revoke all on function public.rdo_campo_prog_dia(date)                    from public, anon;
+revoke all on function public.rdo_campo_prog_salvar(jsonb)                from public, anon;
+revoke all on function public.rdo_campo_prog_excluir(uuid)                from public, anon;
+revoke all on function public.rdo_campo_prog_copiar(date, date, boolean)  from public, anon;
 grant execute on function public.rdo_campo_casa(text, text)                to authenticated;
 grant execute on function public.rdo_campo_contexto(date, text)            to authenticated;
 grant execute on function public.rdo_campo_programados(date)               to authenticated;
-grant execute on function public.rdo_programacao_dia(date)                 to authenticated;
-grant execute on function public.rdo_programacao_salvar(jsonb)             to authenticated;
-grant execute on function public.rdo_programacao_excluir(uuid)             to authenticated;
-grant execute on function public.rdo_programacao_copiar(date, date, boolean) to authenticated;
+grant execute on function public.rdo_campo_prog_dia(date)                 to authenticated;
+grant execute on function public.rdo_campo_prog_salvar(jsonb)             to authenticated;
+grant execute on function public.rdo_campo_prog_excluir(uuid)             to authenticated;
+grant execute on function public.rdo_campo_prog_copiar(date, date, boolean) to authenticated;
 
 
 -- 11. FIM ----------------------------------------------------------------------
@@ -1003,11 +1036,15 @@ grant execute on function public.rdo_programacao_copiar(date, date, boolean) to 
 -- resultado: tem de aparecer "Tudo certo" embaixo, em Results.
 notify pgrst, 'reload schema';
 
+-- Os números de equipes e RDOs ajudam a ver se este é o projeto certo do
+-- Supabase (o mesmo que o site usa): num projeto vazio, aparecem zeros.
 select case
-         when to_regclass('public.rdo_programacao') is not null
-          and to_regprocedure('public.rdo_programacao_dia(date)') is not null
-          and to_regprocedure('public.rdo_programacao_salvar(jsonb)') is not null
+         when to_regclass('public.rdo_campo_programacao') is not null
+          and to_regprocedure('public.rdo_campo_prog_dia(date)') is not null
+          and to_regprocedure('public.rdo_campo_prog_salvar(jsonb)') is not null
           and to_regprocedure('public.rdo_campo_contexto(date, text)') is not null
-         then 'Tudo certo: banco do Sistema RDO atualizado, com a programação de obras. Volte à gestão e toque em Atualizar.'
+         then 'Tudo certo: banco do Sistema RDO atualizado, com a programação de obras. Este banco tem '
+              || jsonb_array_length(public.rdo_campo_equipes()) || ' equipes no Cadastro de Equipes e '
+              || (select count(*) from public.rdo_campo) || ' RDOs do app. Volte à gestão e toque em Atualizar.'
          else 'Faltou alguma parte. Rode o arquivo inteiro de novo e veja se aparece algum erro em vermelho.'
        end as resultado;

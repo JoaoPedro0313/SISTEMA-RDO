@@ -5,7 +5,7 @@
    produção por serviço, equipes, celulares e configurações do app. Lê o que
    o rdo_campo.sql criou: rdo_campo, rdo_campo_aparelhos, rdo_campo_config,
    servicos_catalogo e as funções rdo_campo_equipes, rdo_campo_programados,
-   rdo_campo_salvar_config e rdo_programacao_* (programação feita aqui).
+   rdo_campo_salvar_config e rdo_campo_prog_* (programação feita aqui).
    O RDO aberto, a lista de serviços e o QR code vêm do rdo-app.js (RDOAPP).
    Login próprio (usuário e senha, as mesmas contas do sistema Mariuá) e
    acesso pela função rdo_campo_meu_acesso: gestor ou liberado por um gestor.
@@ -797,7 +797,7 @@
     if (cod === 'PGRST202' || /could not find the function/i.test(m))
       return 'O banco ainda não tem a programação do Sistema RDO' + (falta ? ' (falta a função ' + falta + ')' : '') +
         '. Rode o rdo_campo.sql atualizado no Supabase (SQL Editor → Run) até aparecer "Tudo certo" no resultado, e depois toque em Atualizar.';
-    if (cod === 'PGRST205' || /relation .*rdo_programacao.* does not exist/i.test(m))
+    if (cod === 'PGRST205' || /relation .*rdo_campo_programacao.* does not exist/i.test(m))
       return 'O banco ainda não tem a tabela da programação. Rode o rdo_campo.sql atualizado no Supabase (SQL Editor → Run) e depois toque em Atualizar.';
     if (/failed to fetch|network|load failed/i.test(m)) return 'Sem conexão com o banco. Tente de novo quando a internet voltar.';
     return m + (cod && cod !== 'P0001' ? ' (código ' + cod + ')' : '');
@@ -820,7 +820,7 @@
       $('ga-pg-corpo').innerHTML = '<tr><td colspan="6">' + vazio('Carregando a programação de ' + br(dia) + '…', 'loader-2') + '</td></tr>';
     }
     var pedidos = [
-      G.sb.rpc('rdo_programacao_dia', { p_data: dia }),
+      G.sb.rpc('rdo_campo_prog_dia', { p_data: dia }),
       G.sb.from('rdo_campo').select('*').eq('data', dia).order('recebido_em', { ascending: false }).range(0, 1999)
     ];
     var res = await Promise.all(pedidos.map(function (p) { return Promise.resolve(p).then(function (r) { return r; }, function (e) { return { error: e }; }); }));
@@ -983,7 +983,7 @@
     var rotulo = bt.textContent;
     $('ga-dp-salvar').disabled = true; $('ga-dp-outra').disabled = true; bt.textContent = 'Salvando…';
     try {
-      var r = await G.sb.rpc('rdo_programacao_salvar', { p_item: item });
+      var r = await G.sb.rpc('rdo_campo_prog_salvar', { p_item: item });
       if (r.error) throw r.error;
       lembrarObras([item]);
       var outroDia = item.data !== PG.dia;
@@ -1008,7 +1008,7 @@
     var rdo = rdoDaProg(p);
     if (!confirm('Tirar ' + obraTx(p) + ' da programação de ' + p.equipe_codigo + ' em ' + br(p.data) + '?' +
       (rdo ? ' O RDO que já chegou dessa obra continua guardado.' : ' Se o encarregado já abriu o app, a obra some da tela dele na próxima atualização.'))) return;
-    var r = await G.sb.rpc('rdo_programacao_excluir', { p_id: p.id });
+    var r = await G.sb.rpc('rdo_campo_prog_excluir', { p_id: p.id });
     if (r.error) { toast(erroProg(r.error)); return; }
     toast('Obra tirada da programação de ' + p.equipe_codigo + '.');
     carregarProgramacao();
@@ -1039,7 +1039,7 @@
     if (de === para) { msg.textContent = 'Escolha dois dias diferentes.'; return; }
     bt.disabled = true; bt.textContent = 'Copiando…';
     try {
-      var r = await G.sb.rpc('rdo_programacao_copiar', { p_de: de, p_para: para, p_com_mariua: $('ga-dc-mariua').checked });
+      var r = await G.sb.rpc('rdo_campo_prog_copiar', { p_de: de, p_para: para, p_com_mariua: $('ga-dc-mariua').checked });
       if (r.error) throw r.error;
       var d = r.data || {}, c = +d.copiadas || 0, rep = +d.repetidas || 0, sem = +d.sem_equipe || 0;
       if (!c && !rep && !sem) { msg.textContent = 'Não há obras programadas em ' + br(de) + ' para copiar.' + ($('ga-dc-mariua').checked ? '' : ' Se elas vêm do sistema Mariuá, marque a opção acima.'); return; }

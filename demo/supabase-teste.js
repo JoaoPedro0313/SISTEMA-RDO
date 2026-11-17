@@ -153,7 +153,7 @@
     })).concat([{ email: 'kleber@mariua.com.br', nome: 'Kléber Dias', matricula: '1011', gestor: false, ativo: false, criado_em: quando(120, 10) }]);
     return {
       contas: contas,
-      rdo_campo: rdos, rdo_campo_aparelhos: aparelhos, prog: prog, rdo_programacao: programacao, servicos_catalogo: catalogo,
+      rdo_campo: rdos, rdo_campo_aparelhos: aparelhos, prog: prog, rdo_campo_programacao: programacao, servicos_catalogo: catalogo,
       rdo_campo_config: [{ id: 1, atualizado_em: quando(2, 10), atualizado_por: 'joao.araujo@mariua.com.br', dados: {
         aviso: 'Este é o modo de teste. Os RDOs ficam só neste navegador.', aviso_ativo: true, fotos_minimas: 1, exigir_termino: false, versao_minima: '',
         motivos: ['Chuva', 'Falta de material', 'Desligamento não liberado', 'Interferência de terceiros', 'Veículo ou equipamento', 'Acidente ou incidente', 'Outro'] } }],
@@ -194,10 +194,10 @@
   // Semeia uma vez por dia: no dia seguinte o teste recomeça com datas novas.
   var pronto = (async function () {
     var marca = await banco.ler('_semente');
-    if (!marca || marca.dia !== dia(0) || !marca.contas || marca.v !== 2) {
+    if (!marca || marca.dia !== dia(0) || !marca.contas || marca.v !== 3) {
       var s = semente();
       for (var k in s) await banco.gravar(k, s[k]);
-      await banco.gravar('_semente', { dia: dia(0), em: Date.now(), contas: true, v: 2 });
+      await banco.gravar('_semente', { dia: dia(0), em: Date.now(), contas: true, v: 3 });
     }
   })();
   async function tabela(n) { await pronto; return (await banco.ler(n)) || []; }
@@ -397,7 +397,7 @@
       var alvo = norm(p.p_encarregado);
       var cods = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), alvo); }).map(function (q) { return norm(q.codigo); });
       var mariua = (await tabela('prog')).filter(function (x) { return x.data === p.p_data && casa(norm(x.encarregado), alvo); });
-      var proprio = (await tabela('rdo_programacao')).filter(function (x) {
+      var proprio = (await tabela('rdo_campo_programacao')).filter(function (x) {
         return x.data === p.p_data && (cods.indexOf(norm(x.equipe_codigo)) >= 0 || casa(norm(x.encarregado), alvo));
       }).sort(function (a, b) { return String(a.criado_em).localeCompare(String(b.criado_em)); });
       var eq = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), alvo); })[0];
@@ -422,25 +422,25 @@
         var eq = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), n); })[0];
         juntar(eq ? eq.codigo : null, eq ? eq.encarregado : porEnc[n].encarregado, porEnc[n].obras);
       });
-      (await tabela('rdo_programacao')).filter(function (x) { return x.data === p.p_data; }).forEach(function (x) {
+      (await tabela('rdo_campo_programacao')).filter(function (x) { return x.data === p.p_data; }).forEach(function (x) {
         var eq = EQUIPES.filter(function (q) { return norm(q.codigo) === norm(x.equipe_codigo); })[0];
         juntar(x.equipe_codigo, eq ? eq.encarregado : x.encarregado, 1);
       });
       return Object.keys(grupos).map(function (k) { return grupos[k]; });
     },
-    rdo_programacao_dia: async function (p) {
+    rdo_campo_prog_dia: async function (p) {
       if (!(await papel())) throw new Error('Só quem tem acesso à gestão vê a programação.');
       var mariua = (await tabela('prog')).filter(function (x) { return x.data === p.p_data; }).map(function (x) {
         var eq = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), norm(x.encarregado)); })[0];
         return { id: x.id, origem: 'mariua', data: x.data, equipe_codigo: eq ? eq.codigo : '', encarregado: x.encarregado, pep: x.pep, nome_obra: x.nome_obra,
                  municipio: x.municipio, atividade: x.atividade, turno: '', qtd_previsto: x.qtd_previsto };
       });
-      var proprio = (await tabela('rdo_programacao')).filter(function (x) { return x.data === p.p_data; })
+      var proprio = (await tabela('rdo_campo_programacao')).filter(function (x) { return x.data === p.p_data; })
         .sort(function (a, b) { return String(a.criado_em).localeCompare(String(b.criado_em)); })
         .map(function (x) { return Object.assign({ origem: 'rdo' }, x); });
       return mariua.concat(proprio);
     },
-    rdo_programacao_salvar: async function (p) {
+    rdo_campo_prog_salvar: async function (p) {
       if (!(await papel())) throw new Error('Só quem tem acesso à gestão programa obras.');
       var it = p.p_item || {}, tx = function (v, n) { return String(v == null ? '' : v).trim().slice(0, n) || null; };
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(it.data || ''))) throw new Error('Escolha o dia da programação.');
@@ -450,7 +450,7 @@
       if (!tx(it.pep, 60) && !tx(it.nome_obra, 160)) throw new Error('Escreva o PEP ou o nome da obra.');
       var q = String(it.qtd_previsto == null ? '' : it.qtd_previsto).trim().replace(',', '.'), qtd = null;
       if (q) { if (!/^\d+(\.\d+)?$/.test(q)) throw new Error('Quantidade prevista inválida. Use só números, como 6 ou 320,5.'); qtd = +q; }
-      var linhas = await tabela('rdo_programacao'), agora = new Date().toISOString(), quem = usuarioAtual(), linha;
+      var linhas = await tabela('rdo_campo_programacao'), agora = new Date().toISOString(), quem = usuarioAtual(), linha;
       var dados = { data: it.data, equipe_codigo: eq.codigo, encarregado: eq.encarregado, pep: tx(it.pep, 60), nome_obra: tx(it.nome_obra, 160),
                     municipio: tx(it.municipio, 80), atividade: tx(it.atividade, 160), qtd_previsto: qtd, atualizado_em: agora, atualizado_por: quem };
       if (it.id) {
@@ -462,21 +462,21 @@
         linha = Object.assign({ id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : uuidTeste(Date.now() % 1e9), criado_em: agora, criado_por: quem }, dados);
         linhas.push(linha);
       }
-      await salvar('rdo_programacao', linhas);
+      await salvar('rdo_campo_programacao', linhas);
       return Object.assign({ origem: 'rdo' }, linha);
     },
-    rdo_programacao_excluir: async function (p) {
+    rdo_campo_prog_excluir: async function (p) {
       if (!(await papel())) throw new Error('Só quem tem acesso à gestão tira obras da programação.');
-      var linhas = await tabela('rdo_programacao'), resto = linhas.filter(function (x) { return x.id !== p.p_id; });
+      var linhas = await tabela('rdo_campo_programacao'), resto = linhas.filter(function (x) { return x.id !== p.p_id; });
       if (resto.length === linhas.length) throw new Error('Essa obra programada não existe mais. Toque em Atualizar.');
-      await salvar('rdo_programacao', resto);
+      await salvar('rdo_campo_programacao', resto);
       return null;
     },
-    rdo_programacao_copiar: async function (p) {
+    rdo_campo_prog_copiar: async function (p) {
       if (!(await papel())) throw new Error('Só quem tem acesso à gestão programa obras.');
       if (!p.p_de || !p.p_para) throw new Error('Escolha os dois dias.');
       if (p.p_de === p.p_para) throw new Error('Escolha dois dias diferentes.');
-      var linhas = await tabela('rdo_programacao'), prog = await tabela('prog'), agora = new Date().toISOString(), quem = usuarioAtual();
+      var linhas = await tabela('rdo_campo_programacao'), prog = await tabela('prog'), agora = new Date().toISOString(), quem = usuarioAtual();
       var origem = linhas.filter(function (x) { return x.data === p.p_de; }).sort(function (a, b) { return String(a.criado_em).localeCompare(String(b.criado_em)); });
       if (p.p_com_mariua) origem = origem.concat(prog.filter(function (x) { return x.data === p.p_de; }).map(function (x) {
         var eq = EQUIPES.filter(function (q) { return casa(norm(q.encarregado), norm(x.encarregado)); })[0];
@@ -496,7 +496,7 @@
                       criado_em: agora, criado_por: quem, atualizado_em: agora, atualizado_por: quem });
         r.copiadas++;
       });
-      await salvar('rdo_programacao', linhas);
+      await salvar('rdo_campo_programacao', linhas);
       return r;
     },
     rdo_campo_servicos: async function () {
